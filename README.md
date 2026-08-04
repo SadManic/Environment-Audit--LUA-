@@ -19,44 +19,6 @@ loadstring(game:HttpGet("[https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_R
 
 🛡️ Execution Integrity & Sandboxing: Function hook parameter passing, game metatable write protection locks, call stack trace masking (debug.traceback), and directory traversal containment (../../).
 
-💻 Sample Output
-
---------------------------------------------------
-             EXECUTOR DIAGNOSTICS                
---------------------------------------------------
-Executor : Velocity
-Version  : 1.3.6
-Thread ID: 8
---------------------------------------------------
-
-Running tests...
-
---------------------------------------------------
-                  DETAILED LOGS                   
---------------------------------------------------
-
---- [UNC Baseline] ---
-   Environment Tables             : ✅ PASS
-   getrawmetatable                : ✅ PASS
-   setrawmetatable                : ✅ PASS
-   ...
-
---- [Debug & Reflection] ---
-   cloneref                       : ❌ FAIL
-      ↳ Proxy equality check failed
-   debug.getupvalues / setupvalue : ❌ FAIL
-      ↳ setupvalue failed to change upvalue
-   ...
-
---------------------------------------------------
-                     SUMMARY                      
---------------------------------------------------
-Executor : Velocity (1.3.6)
-Passed   : 29
-Failed   : 2
-Total    : 31
-Score    : 93.5%
---------------------------------------------------
 🤝 Contributing
 Contributions, bug reports, and additional subsystem test requests are welcome! Feel free to open an Issue or submit a Pull Request.
 
