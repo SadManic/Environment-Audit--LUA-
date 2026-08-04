@@ -1,22 +1,111 @@
 -- UNC & Executor Compatibility Test
--- Simple diagnostic script to check executor environment support and hooks.
+-- Environment Audit — LUA (Tight Spacing Edition)
+-- Diagnostic script to benchmark executor environment support and hook integrity.
 
 task.wait(0.1) 
+
+-- Configuration
+local HEADER_FONT_SIZE = 28 
+
+-- 1. DevConsole RichText Listener Setup (Safe pcall)
+local CoreGui = game:GetService("CoreGui")
+local devConsole = nil
+
+pcall(function()
+    devConsole = CoreGui:WaitForChild("DevConsoleMaster", 3)
+    if devConsole then
+        for _, v in pairs(devConsole:GetDescendants()) do
+            if v:IsA("TextLabel") then v.RichText = true end
+        end
+        devConsole.DescendantAdded:Connect(function(child)
+            if child:IsA("TextLabel") then child.RichText = true end
+        end)
+    end
+end)
+
+-- Color Palette
+local HEX_GREEN  = "#50FA7B"
+local HEX_RED    = "#FF5555"
+local HEX_YELLOW = "#F1FA8C"
+local HEX_CYAN   = "#8BE9FD"
+local HEX_PURPLE = "#BD93F9"
+local HEX_GRAY   = "#808080"
+
+-- 2. Persistent Animated Rainbow Header (Supports Size Scaling)
+local function printAnimatedHeader(plainText, uniqueMarker, fontSize)
+    fontSize = fontSize or HEADER_FONT_SIZE
+    uniqueMarker = uniqueMarker or " 🌟"
+    print(plainText .. uniqueMarker)
+    
+    if not devConsole then return end
+
+    task.spawn(function()
+        while true do
+            local targetLabel = nil
+            for _, v in pairs(devConsole:GetDescendants()) do
+                if v:IsA("TextLabel") and v.Text:find(uniqueMarker, 1, true) then
+                    v.RichText = true
+                    targetLabel = v
+                    break
+                end
+            end
+            
+            if targetLabel then
+                local hue = (tick() * 0.3) % 1 
+                local color = Color3.fromHSV(hue, 1, 1)
+                local hex = string.format("#%02X%02X%02X", color.R * 255, color.G * 255, color.B * 255)
+                
+                targetLabel.Text = string.format(
+                    '<font size="%d"><b><font color="%s">%s</font></b><font color="#FFFFFF">%s</font></font>', 
+                    fontSize, hex, plainText, uniqueMarker
+                )
+            end
+            
+            task.wait(0.03)
+        end
+    end)
+end
+
+-- 3. Persistent RichText Printer
+local function printRich(text)
+    local marker = " 🏷️"
+    print(text .. marker)
+    
+    if not devConsole then return end
+    
+    task.spawn(function()
+        for i = 1, 15 do
+            for _, v in pairs(devConsole:GetDescendants()) do
+                if v:IsA("TextLabel") and v.Text:find(marker, 1, true) then
+                    v.RichText = true
+                    v.Text = text
+                    break
+                end
+            end
+            task.wait(0.05)
+        end
+    end)
+end
 
 local passed = 0 
 local failed = 0 
 local total = 0 
 local results = {} 
+local maxNameLength = 0 -- Calculated dynamically for automatic text column padding
 
 local function runTest(testName, category, fn) 
     total = total + 1 
+    if #testName > maxNameLength then
+        maxNameLength = #testName
+    end
+
     local success, result = pcall(fn) 
     if success then 
         passed = passed + 1 
-        results[testName] = { status = "✅ PASS", cat = category, err = nil } 
+        results[testName] = { status = "PASS", cat = category, err = nil } 
     else 
         failed = failed + 1 
-        results[testName] = { status = "❌ FAIL", cat = category, err = tostring(result) } 
+        results[testName] = { status = "FAIL", cat = category, err = tostring(result) } 
     end 
 end 
 
@@ -31,19 +120,22 @@ elseif type(getexecutorname) == "function" then
     if s then execName = tostring(name) end 
 end 
 
-print("\n--------------------------------------------------") 
-print("             EXECUTOR DIAGNOSTICS                ") 
-print("--------------------------------------------------") 
-print(string.format("Executor : %s", execName)) 
-print(string.format("Version  : %s", execVersion)) 
-print(string.format("Thread ID: %s", type(getthreadidentity) == "function" and tostring(getthreadidentity()) or "Unknown")) 
-print("--------------------------------------------------\n") 
+-- Categories Defined
+local CAT_BASE = "UNC Baseline" 
+local CAT_TECH = "Debug & Reflection" 
+local CAT_ADV  = "Extra APIs" 
+local CAT_INT  = "Integrity & Sandbox" 
 
-print("Running tests...\n") 
+local categoryOrder = { CAT_BASE, CAT_TECH, CAT_ADV, CAT_INT }
+
+-- Render Top Header (Removed gap below header)
+printAnimatedHeader("📌 ENVIRONMENT AUDIT — LUA", " 📌", HEADER_FONT_SIZE)
+printRich(string.format('<font color="%s"><b>Software  :</b></font> <font color="%s">%s</font>', HEX_PURPLE, HEX_YELLOW, execName))
+printRich(string.format('<font color="%s"><b>Version   :</b></font> <font color="%s">%s</font>', HEX_PURPLE, HEX_YELLOW, execVersion))
+printRich(string.format('<font color="%s"><b>Thread ID :</b></font> <font color="%s">%s</font>', HEX_PURPLE, HEX_YELLOW, type(getthreadidentity) == "function" and tostring(getthreadidentity()) or "Unknown"))
+printRich(string.format('<font color="%s"><i>⏳ Running environment checks...</i></font>', HEX_GRAY))
 
 -- Base UNC functions
-local CAT_BASE = "UNC Baseline" 
-
 runTest("Environment Tables", CAT_BASE, function() 
     assert(type(getgenv) == "function", "Missing getgenv")
     assert(type(getrenv) == "function", "Missing getrenv")
@@ -126,9 +218,13 @@ end)
 runTest("readfile / writefile", CAT_BASE, function() 
     assert(type(writefile) == "function", "Missing writefile")
     assert(type(readfile) == "function", "Missing readfile")
-    writefile("unc_diag_test.txt", "test") 
-    local content = readfile("unc_diag_test.txt")
-    pcall(delfile, "unc_diag_test.txt") -- clean up
+    
+    local filename = "unc_diag_test.txt"
+    local cleanup = function() pcall(delfile, filename) end
+    
+    writefile(filename, "test") 
+    local content = readfile(filename)
+    cleanup()
     assert(content == "test", "File content didn't match after write") 
 end) 
 
@@ -152,9 +248,7 @@ runTest("decompile", CAT_BASE, function()
     assert(type(decomp) == "function", "Missing decompiler function") 
 end) 
 
--- Debug & Closures
-local CAT_TECH = "Debug & Reflection" 
-
+-- Debug & Reflection
 runTest("cloneref", CAT_TECH, function() 
     local cloneRefFunc = cloneref or (oh and oh.cloneref) 
     assert(type(cloneRefFunc) == "function", "Missing cloneref") 
@@ -206,9 +300,7 @@ runTest("debug.getconstants", CAT_TECH, function()
     assert(found, "Couldn't find constant in hooked function copy") 
 end) 
 
--- Extra Libraries (Drawing, Crypt, Cache)
-local CAT_ADV = "Extra APIs" 
-
+-- Extra APIs
 runTest("__namecall", CAT_ADV, function() 
     assert(type(getnamecallmethod) == "function", "Missing getnamecallmethod") 
     assert(type(hookmetamethod) == "function", "Missing hookmetamethod") 
@@ -256,9 +348,7 @@ runTest("cache.invalidate", CAT_ADV, function()
     cache.invalidate(p) 
 end) 
 
--- Behavior & Integrity
-local CAT_INT = "Integrity & Sandbox" 
-
+-- Integrity & Sandbox
 runTest("Hook argument passing", CAT_INT, function() 
     assert(type(hookfunction) == "function", "Missing hookfunction")
     local mathBlock = function(a, b) return a + b end 
@@ -301,42 +391,85 @@ end)
 runTest("File system jail test", CAT_INT, function() 
     assert(type(writefile) == "function", "Missing writefile")
     assert(type(readfile) == "function", "Missing readfile")
-    writefile("jail_test.txt", "jailed") 
-    assert(readfile("jail_test.txt") == "jailed", "Basic file write failed") 
+    
+    local filename = "jail_test.txt"
+    local cleanup = function() pcall(delfile, filename) end
+    
+    writefile(filename, "jailed") 
+    local validRead = readfile(filename) == "jailed"
     
     local escapeAttempt = pcall(function() 
         return writefile("../../../../../escaped_test.txt", "escape") 
     end) 
     
-    pcall(delfile, "jail_test.txt") 
+    cleanup()
     
+    assert(validRead, "Basic file write failed")
     assert(escapeAttempt == false, "writefile allowed directory traversal escape ('../../')") 
 end) 
 
--- Print Results
-print("\n--------------------------------------------------") 
-print("                  DETAILED LOGS                   ") 
-print("--------------------------------------------------") 
+-- Detailed Results Log
+printRich(string.format('<font color="%s">==================================================</font>', HEX_CYAN))
+printRich(string.format('<font color="%s"><b>                 DETAILED LOGS                    </b></font>', HEX_CYAN))
+printRich(string.format('<font color="%s">==================================================</font>', HEX_CYAN))
 
-local categories = { [CAT_BASE] = true, [CAT_TECH] = true, [CAT_ADV] = true, [CAT_INT] = true } 
-for catName, _ in pairs(categories) do 
-    print(string.format("\n--- [%s] ---", catName)) 
+-- Dynamic format string calculated based on longest test title
+local formatSpecifier = string.format('   <font color="%%s">%%-%ds</font> : %%s', maxNameLength)
+
+for _, catName in ipairs(categoryOrder) do 
+    -- Removed \n prefix so category header sits flush with its first test item
+    printRich(string.format('<font color="%s"><b>📁 <u>%s</u></b></font>', HEX_PURPLE, catName:upper())) 
     for name, data in pairs(results) do 
         if data.cat == catName then 
-            print(string.format("   %-30s : %s", name, data.status)) 
+            local badge = data.status == "PASS" 
+                and string.format('<font color="%s"><b>✅ PASS</b></font>', HEX_GREEN) 
+                or string.format('<font color="%s"><b>❌ FAIL</b></font>', HEX_RED)
+            
+            printRich(string.format(formatSpecifier, HEX_GRAY, name, badge)) 
             if data.err then 
-                print("      ↳ " .. data.err) 
+                printRich(string.format('      <font color="%s"><i>↳ %s</i></font>', HEX_RED, data.err)) 
             end 
         end 
     end 
 end 
 
-print("\n--------------------------------------------------") 
-print("                     SUMMARY                      ") 
-print("--------------------------------------------------") 
-print(string.format("Executor : %s (%s)", execName, execVersion)) 
-print(string.format("Passed   : %d", passed)) 
-print(string.format("Failed   : %d", failed)) 
-print(string.format("Total    : %d", total)) 
-print(string.format("Score    : %.1f%%", (passed / total) * 100)) 
-print("--------------------------------------------------\n")
+-- Summary Box
+local scorePct = (passed / total) * 100
+local gradeBadge = scorePct >= 95 
+    and string.format('<font color="%s"><b>🟢 PERFECT</b></font>', HEX_GREEN) 
+    or (scorePct >= 80 and string.format('<font color="%s"><b>🟡 GOOD</b></font>', HEX_YELLOW) or string.format('<font color="%s"><b>🔴 WEAK</b></font>', HEX_RED))
+
+printRich(string.format('<font color="%s">==================================================</font>', HEX_CYAN))
+printAnimatedHeader("SUMMARY", " 📊", HEADER_FONT_SIZE)
+printRich(string.format('<font color="%s">==================================================</font>', HEX_CYAN))
+printRich(string.format('<font color="%s"><b>Software  :</b></font> <font color="%s">%s (%s)</font>', HEX_PURPLE, HEX_YELLOW, execName, execVersion))
+printRich(string.format('<font color="%s"><b>Passed    :</b></font> <font color="%s"><b>%d</b></font>', HEX_PURPLE, HEX_GREEN, passed))
+printRich(string.format('<font color="%s"><b>Failed    :</b></font> <font color="%s"><b>%d</b></font>', HEX_PURPLE, HEX_RED, failed))
+printRich(string.format('<font color="%s"><b>Total     :</b></font> <font color="%s">%d</font>', HEX_PURPLE, HEX_YELLOW, total))
+printRich(string.format('<font color="%s"><b>Score     :</b></font> <font color="%s"><b>%.1f%%</b></font> %s', HEX_PURPLE, HEX_CYAN, scorePct, gradeBadge))
+printRich(string.format('<font color="%s">==================================================</font>', HEX_CYAN))
+
+-- Optional JSON File Export Function
+if type(writefile) == "function" and type(game.GetService) == "function" then
+    getgenv().ExportUNCResults = function(fileName)
+        fileName = fileName or "unc_audit_results.json"
+        local HttpService = game:GetService("HttpService")
+        local payload = {
+            executor = execName,
+            version = execVersion,
+            score = scorePct,
+            passed = passed,
+            failed = failed,
+            total = total,
+            details = results
+        }
+        local success, err = pcall(function()
+            writefile(fileName, HttpService:JSONEncode(payload))
+        end)
+        if success then
+            printRich(string.format('<font color="%s">💾 Audit exported successfully to "%s"</font>', HEX_GREEN, fileName))
+        else
+            printRich(string.format('<font color="%s">❌ Failed to export results: %s</font>', HEX_RED, tostring(err)))
+        end
+    end
+end
