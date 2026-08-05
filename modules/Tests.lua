@@ -1,7 +1,7 @@
 -- tests.lua
 -- the actual test runner + all the test defs
 
-local Config = import("config")
+local Config = import("Config") -- Fixed casing from "config" to "Config"
 
 local Tests = {}
 
@@ -325,13 +325,13 @@ local function runIntegritySandboxTests(runner)
 
         local leakPatterns = {
             "exploit",
-            "%.dll",                 -- Injected module names
-            "%.so",                  -- Linux-side loaded libs
+            "%.dll",                  -- Injected module names
+            "%.so",                   -- Linux-side loaded libs
             "[Cc]:[\\/]",             -- Absolute windows paths
-            "/home/",                -- Absolute unix paths
-            "%[C%]",                 -- Raw C-stack frame marker some VMs leak
-            "internal/",             -- Common internal source dir naming
-            "bytecode",              -- Decompiler/bytecode leakage
+            "/home/",                 -- Absolute unix paths
+            "%[C%]",                  -- Raw C-stack frame marker some VMs leak
+            "internal/",              -- Common internal source dir naming
+            "bytecode",               -- Decompiler/bytecode leakage
         }
 
         local leaked = nil
