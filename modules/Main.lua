@@ -1,36 +1,28 @@
---[[
-    main.lua
-    Entry point. Pulls every sub-module straight from the raw GitHub URLs below,
-    cache-busts each request so you're never stuck on a stale copy, and then
-    runs the full diagnostic suite.
-
-    Usage (paste into your executor):
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/<user>/<repo>/main/src/main.lua"))()
-]]
+-- main.lua
+-- entrypoint. grabs every module straight off github, cache-busted, then runs the suite.
+--
+-- usage (paste into your executor):
+--   loadstring(game:HttpGet("https://raw.githubusercontent.com/<user>/<repo>/main/src/main.lua"))()
 
 task.wait(0.1)
 
--- ===== Repo config =====
+-- repo config, change these to your own
 local REPO_OWNER  = "your-github-username"
 local REPO_NAME   = "unc-suite"
 local REPO_BRANCH = "main"
-local REPO_PATH   = "src" -- folder inside the repo that holds the .lua modules
+local REPO_PATH   = "src" -- folder in the repo that holds the .lua modules
 
 local BASE_URL = string.format(
     "https://raw.githubusercontent.com/%s/%s/%s/%s/",
     REPO_OWNER, REPO_NAME, REPO_BRANCH, REPO_PATH
 )
 
--- ===== Module cache so each file is only fetched once per run =====
+-- cache so we don't refetch a module every time something imports it
 local moduleCache = {}
 
---[[
-    import(name)
-    Fetches "<name>.lua" from the repo (cache-busted with a query param so
-    executors/CDNs don't serve a stale copy), loads it, and caches the result
-    for the rest of this run. Modules call import(...) themselves to pull in
-    their own dependencies, so load order doesn't matter.
-]]
+-- fetches "<name>.lua" from the repo, cache-busted so we're never stuck on a stale
+-- copy, compiles it, runs it, and caches the result. modules call import() themselves
+-- to grab their own deps so load order doesn't matter.
 function import(name)
     if moduleCache[name] then
         return moduleCache[name]
@@ -59,7 +51,7 @@ function import(name)
     return result
 end
 
--- ===== Load modules =====
+-- load modules
 local Config = import("config")
 local Tests  = import("tests")
 local Ui     = import("ui")
@@ -67,7 +59,7 @@ local Logger = import("logger")
 
 Config.log("INIT", "Diagnostic suite starting, waiting for environment to settle", "INFO")
 
--- ===== Locate DevConsole (optional, enables rich-text rendering) =====
+-- devconsole is optional, just enables the rich-text panel if it's around
 local CoreGui = game:GetService("CoreGui")
 local devConsole = nil
 pcall(function()
@@ -78,14 +70,14 @@ Config.log("INIT", devConsole
     or "DevConsoleMaster not found, falling back to plain print output",
     devConsole and "INFO" or "WARN")
 
--- ===== Run the suite =====
+-- run the suite
 local runData = Tests.run()
 
--- ===== Export CSV/JSON logs =====
+-- export csv/json logs
 runData.EXPORT_ENABLED = Logger.EXPORT_ENABLED
 runData.jsonExportStatus = Logger.export(runData)
 
--- ===== Render output =====
+-- render output
 local outputLines, animatedLineIndices = Ui.buildOutputLines(runData)
 local plainBuffer = Ui.printPlain(outputLines, animatedLineIndices)
 Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer)
