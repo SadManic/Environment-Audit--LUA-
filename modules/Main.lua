@@ -1,15 +1,15 @@
--- Main.lua
+-- main.lua
 -- entrypoint. grabs every module straight off github, cache-busted, then runs the suite.
 --
 -- usage (paste into your executor):
--- loadstring(game:HttpGet("https://raw.githubusercontent.com/SadManic/Environment-Audit--LUA-/main/modules/Main.lua?cb=" .. tostring(math.random(1, 100000))))()
+--   loadstring(game:HttpGet("https://raw.githubusercontent.com/SadManic/Environment-Audit--LUA-/main/modules/main.lua"))()
 
 task.wait(0.1)
 
 local REPO_OWNER  = "SadManic"
 local REPO_NAME   = "Environment-Audit--LUA-"
 local REPO_BRANCH = "main"
-local REPO_PATH   = "modules"
+local REPO_PATH   = "modules" -- folder in the repo that holds the .lua modules
 
 local BASE_URL = string.format(
     "https://raw.githubusercontent.com/%s/%s/%s/%s/",
@@ -50,11 +50,11 @@ function import(name)
     return result
 end
 
--- load modules (Matching exact uppercase casing on GitHub)
-local Config = import("Config")
-local Tests  = import("Tests")
-local Ui     = import("Ui")
-local Logger = import("Logger")
+-- load modules
+local Config = import("config")
+local Tests  = import("tests")
+local Ui     = import("ui")
+local Logger = import("logger")
 
 Config.log("INIT", "Diagnostic suite starting, waiting for environment to settle", "INFO")
 
