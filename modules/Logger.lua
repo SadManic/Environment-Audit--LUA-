@@ -1,6 +1,5 @@
 -- logger.lua
--- CSV/JSON file export logic for unc_results_log.*
--- Depends on: config.lua, json.lua
+-- csv/json logging, appends every run
 
 local Config = import("config")
 local JSON   = import("json")
@@ -34,9 +33,7 @@ local function safeReadFile(path)
     return nil, false
 end
 
--- Writes both the CSV and JSON run logs for a completed test run.
--- runData = { execName, execVersion, passed, failed, total, scorePct, weightedPct, resultOrder, results }
--- Returns jsonExportStatus: "ok" | "failed" | "skipped"
+-- writes both csv and json logs for one completed run, returns the json export status
 function Logger.export(runData)
     Config.log("EXPORT", Logger.EXPORT_ENABLED
         and "File I/O available, log export enabled"
@@ -115,7 +112,7 @@ function Logger.export(runData)
             if decoded ~= nil and JSON.isArray(decoded) then
                 runLog = decoded
             else
-                -- Corrupted, back it up before overwriting
+                -- corrupted, back it up before overwriting
                 Config.log("EXPORT", string.format("Existing JSON log unparsable (%s), backing up to %s",
                     tostring(decodeErr), Config.JSON_BACKUP_FILE), "WARN")
                 pcall(writefile, Config.JSON_BACKUP_FILE, existingJson)
