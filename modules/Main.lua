@@ -51,10 +51,10 @@ function import(name)
 end
 
 -- load modules
-local Config = import("config")
-local Tests  = import("tests")
-local Ui     = import("ui")
-local Logger = import("logger")
+local Config = import("Config")
+local Tests  = import("Tests")
+local Ui     = import("Ui")
+local Logger = import("Logger")
 
 Config.log("INIT", "Diagnostic suite starting, waiting for environment to settle", "INFO")
 
