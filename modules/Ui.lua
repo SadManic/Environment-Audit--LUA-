@@ -1,6 +1,5 @@
 -- ui.lua
--- Animated RGB rainbow text, output-line rendering, and DevConsole injection hook.
--- Depends on: config.lua
+-- rainbow text gen, output line rendering, devconsole hook
 
 local Config = import("config")
 
@@ -8,7 +7,7 @@ local RunService = game:GetService("RunService")
 
 local Ui = {}
 
--- ===== Rainbow text gen, colors shift over time =====
+-- colors shift over time
 function Ui.getAnimatedRainbowText(text, timeOffset)
     local result = ""
     local len = #text
@@ -32,17 +31,14 @@ function Ui.getAnimatedRainbowText(text, timeOffset)
     return "<b>" .. result .. "</b>"
 end
 
--- ===== Build the rich-text output lines from a completed run =====
--- runData = { execName, execVersion, passed, failed, total, scorePct, weightedPct,
---             resultOrder, results, maxNameLength, EXPORT_ENABLED, jsonExportStatus }
--- Returns: outputLines, animatedLineIndices
+-- build the output lines from a finished run
 function Ui.buildOutputLines(runData)
     Config.log("RENDER", "Assembling output lines and computing scores", "INFO")
 
     local outputLines = {}
     local animatedLineIndices = {}
 
-    -- Header (animated)
+    -- header (animated)
     table.insert(outputLines, "HEADER_ANIMATED_PLACEHOLDER")
     animatedLineIndices[1] = "ENVIRONMENT AUDIT — LUA"
 
@@ -56,7 +52,7 @@ function Ui.buildOutputLines(runData)
 
     local formatSpecifier = string.format('   <font color="%%s">%%-%ds</font> : %%s', runData.maxNameLength)
 
-    -- Use resultOrder so this prints in the same order every run
+    -- use resultOrder so this prints in the same order every run
     for _, catName in ipairs(Config.categoryOrder) do
         table.insert(outputLines, string.format('<font color="%s"><b>📁 <u>%s</u></b></font>', Config.HEX_PURPLE, catName:upper()))
         for _, name in ipairs(runData.resultOrder) do
@@ -82,7 +78,7 @@ function Ui.buildOutputLines(runData)
 
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
 
-    -- Summary line (animated)
+    -- summary line (animated)
     local summaryIdx = #outputLines + 1
     table.insert(outputLines, "SUMMARY_ANIMATED_PLACEHOLDER")
     animatedLineIndices[summaryIdx] = "SUMMARY 📊"
@@ -103,8 +99,7 @@ function Ui.buildOutputLines(runData)
     return outputLines, animatedLineIndices
 end
 
--- ===== Print plain-text lines to the output console, tagging each with a marker =====
--- Returns plainBuffer: idx -> marker string, used to locate matching TextLabels later.
+-- print it all, tag each line with a marker so we can find it again in devconsole
 function Ui.printPlain(outputLines, animatedLineIndices)
     Config.log("RENDER", string.format("Built %d output lines, printing to console", #outputLines), "INFO")
 
@@ -123,7 +118,7 @@ function Ui.printPlain(outputLines, animatedLineIndices)
     return plainBuffer
 end
 
--- ===== Rainbow text in dev console if it's open =====
+-- rainbow text in dev console if its open
 function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer)
     if not devConsole then
         Config.log("RENDER", "Skipping rich-text formatter, no DevConsole available", "INFO")
@@ -142,7 +137,7 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                         obj.RichText = true
                         activeLabels[idx] = obj
 
-                        -- Lock text so it doesn't get overwritten
+                        -- lock text so it doesn't get overwritten
                         if not animatedLineIndices[idx] then
                             local targetRichText = outputLines[idx]
                             obj.Text = targetRichText
