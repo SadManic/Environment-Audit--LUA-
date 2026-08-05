@@ -1,12 +1,11 @@
 -- tests.lua
--- Test execution runner & test definitions.
--- Depends on: config.lua
+-- the actual test runner + all the test defs
 
 local Config = import("config")
 
 local Tests = {}
 
--- ===== Executor identification =====
+-- executor info
 function Tests.identifyExecutor()
     Config.log("EXEC-ID", "Attempting to identify host executor", "INFO")
     local execName, execVersion = "Unknown", "N/A"
@@ -23,8 +22,7 @@ function Tests.identifyExecutor()
     return execName, execVersion
 end
 
--- ===== Runner state + runTest =====
--- Returns a fresh runner object so Tests.run() can be called more than once cleanly.
+-- fresh runner object each call so Tests.run() can be re-run cleanly if needed
 local function newRunner()
     local runner = {
         passed = 0,
@@ -66,7 +64,7 @@ local function newRunner()
     return runner
 end
 
--- ===== Test definitions, grouped by category =====
+-- test defs, grouped by category
 local function runBaselineTests(runner)
     Config.log("SUITE", string.format("Beginning category '%s'", Config.CAT_BASE), "INFO")
 
@@ -321,7 +319,7 @@ local function runIntegritySandboxTests(runner)
         setreadonly(protectedMeta, originalReadOnlyState)
     end)
 
-    -- Check for leaks besides just the word "exploit"
+    -- check for leaks besides just the word "exploit"
     runner:runTest("Traceback filtering", Config.CAT_INT, function()
         assert(type(newcclosure) == "function", "Missing newcclosure")
 
@@ -350,7 +348,7 @@ local function runIntegritySandboxTests(runner)
         assert(leaked == nil, "debug.traceback leaked internal detail matching pattern: " .. tostring(leaked))
     end)
 
-    -- Try a few traversal tricks, not just ".."
+    -- try a few traversal tricks, not just ".."
     runner:runTest("File system jail test", Config.CAT_INT, function()
         assert(type(writefile) == "function", "Missing writefile")
         assert(type(readfile) == "function", "Missing readfile")
@@ -389,8 +387,7 @@ local function runIntegritySandboxTests(runner)
     Config.log("SUITE", string.format("Category '%s' complete (%d/%d passed so far)", Config.CAT_INT, runner.passed, runner.total), "INFO")
 end
 
--- ===== Public entrypoint =====
--- Runs the full suite and returns a runData table consumed by ui.lua / logger.lua.
+-- runs the whole suite, hands back a runData table for ui.lua / logger.lua to use
 function Tests.run()
     local execName, execVersion = Tests.identifyExecutor()
     local runner = newRunner()
