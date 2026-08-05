@@ -1,9 +1,9 @@
 -- json.lua
--- No json lib on these executors so rolling our own. Pure Luau, no dependencies.
+-- no json lib on these executors so rolling my own. pure luau, zero deps.
 
 local JSON = {}
 
--- ===== Encode =====
+-- encode
 
 local JSON_ESCAPES = {
     ['"']  = '\\"',
@@ -22,7 +22,7 @@ local function jsonEncodeString(str)
     return '"' .. str .. '"'
 end
 
--- Array = keys 1..N with no gaps, else it's an object
+-- array = keys 1..N with no gaps, else it's an object
 local function isArray(t)
     local n = 0
     for _ in pairs(t) do n = n + 1 end
@@ -32,7 +32,7 @@ local function isArray(t)
     end
     return true
 end
-JSON.isArray = isArray
+JSON.isArray = isArray -- logger.lua needs this too, exporting it
 
 function JSON.encode(value)
     local vType = type(value)
@@ -43,7 +43,7 @@ function JSON.encode(value)
         return tostring(value)
     elseif vType == "number" then
         if value ~= value or value == math.huge or value == -math.huge then
-            return "null" -- Not valid JSON
+            return "null" -- not valid JSON
         end
         return tostring(value)
     elseif vType == "string" then
@@ -63,18 +63,18 @@ function JSON.encode(value)
             return "{" .. table.concat(parts, ",") .. "}"
         end
     else
-        return "null" -- Functions, userdata, etc
+        return "null" -- functions, userdata, etc
     end
 end
 
--- ===== Decode =====
+-- decode
 
 local function jsonSkipWhitespace(str, pos)
     local _, stop = str:find("^[ \t\r\n]*", pos)
     return stop + 1
 end
 
-local jsonDecodeValue -- Forward decl
+local jsonDecodeValue -- forward decl
 
 local function jsonDecodeError(msg, str, pos)
     error(string.format("JSON decode error at position %d: %s (near '%s')",
@@ -207,7 +207,7 @@ jsonDecodeValue = function(str, pos)
     end
 end
 
--- Returns nil + err instead of throwing on bad input
+-- returns nil + err instead of throwing on bad input
 function JSON.decode(str)
     if type(str) ~= "string" or str:match("^%s*$") then
         return nil, "empty input"
