@@ -2,7 +2,7 @@
 -- entrypoint. grabs every module straight off github, cache-busted, then runs the suite.
 --
 -- usage (paste into your executor):
---   loadstring(game:HttpGet("https://raw.githubusercontent.com/<user>/<repo>/main/src/main.lua"))()
+-- loadstring(game:HttpGet("https://raw.githubusercontent.com/SadManic/Environment-Audit--LUA-/refs/heads/main/modules/Main.lua"))()
 
 task.wait(0.1)
 
