@@ -6,12 +6,10 @@
 
 task.wait(0.1)
 
--- repo config, change these to your own
-local REPO_OWNER  = "your-github-username"
-local REPO_NAME   = "unc-suite"
+local REPO_OWNER  = "SadManic"
+local REPO_NAME   = "Environment-Audit--LUA-"
 local REPO_BRANCH = "main"
-local REPO_PATH   = "src" -- folder in the repo that holds the .lua modules
-
+local REPO_PATH   = "modules"
 local BASE_URL = string.format(
     "https://raw.githubusercontent.com/%s/%s/%s/%s/",
     REPO_OWNER, REPO_NAME, REPO_BRANCH, REPO_PATH
