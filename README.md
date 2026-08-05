@@ -11,7 +11,7 @@ Unlike standard test suites that use weak wrappers to inflate compatibility scor
 To run the audit directly in your executor, execute the following snippet:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/main.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/SadManic/Environment-Audit--LUA-/refs/heads/main/main.lua"))()
 ```
 
 ---
