@@ -1,28 +1,31 @@
 -- ui.lua
--- optimized rainbow text gen, output line rendering, devconsole hook
+-- rainbow text gen, output line rendering, devconsole hook
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
 
 local Ui = {}
 
--- Optimized HSV pulse engine with chunking to prevent Roblox RichText parser overload
+-- Clean per-letter HSV pulse engine
 function Ui.getAnimatedRainbowText(text, timeOffset)
     local result = ""
     local len = #text
     timeOffset = timeOffset or 0
 
-    -- Group characters slightly to reduce tag bloat and fix text corruption
-    for i = 1, len, 2 ी or 1 do -- standard step 1 for smooth per-char coloring, but optimized string builder
-        local chunk = text:sub(i, math.min(i + 1, len))
-        local hue = ((i / len) + (timeOffset * 0.4)) % 1
-        local color = Color3.fromHSV(hue, 0.85, 1)
-        local hexColor = string.format("#%02X%02X%02X",
-            math.floor(color.R * 255),
-            math.floor(color.G * 255),
-            math.floor(color.B * 255)
-        )
-        result = result .. string.format('<font color="%s">%s</font>', hexColor, chunk)
+    for i = 1, len do
+        local char = text:sub(i, i)
+        if char == " " then
+            result = result .. " "
+        else
+            local hue = ((i / len) + (timeOffset * 0.4)) % 1
+            local color = Color3.fromHSV(hue, 0.85, 1)
+            local hexColor = string.format("#%02X%02X%02X",
+                math.floor(color.R * 255),
+                math.floor(color.G * 255),
+                math.floor(color.B * 255)
+            )
+            result = result .. string.format('<font color="%s">%s</font>', hexColor, char)
+        end
     end
     return "<b>" .. result .. "</b>"
 end
@@ -34,7 +37,7 @@ function Ui.buildOutputLines(runData)
     local outputLines = {}
     local animatedLineIndices = {}
 
-    -- Shortened, lightweight header to prevent text layout throttling
+    -- Clean text header using pure letters and spaces
     local aegisAsciiHeader = {
         "AEGIS SECURITY SUITE",
         "ENVIRONMENT INTEGRITY AUDIT"
@@ -175,7 +178,7 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
             checkAndFormatLabel(desc)
         end)
 
-        -- Throttled to ~30fps for smooth performance without parser choking
+        -- ~30fps update loop for smooth pulsing
         local lastUpdate = 0
         RunService.RenderStepped:Connect(function()
             local now = tick()
