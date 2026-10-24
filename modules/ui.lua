@@ -1,5 +1,5 @@
--- ui.lua
--- Rainbow text engine, clean console output, floating interactive controls
+-- modules/ui.lua
+-- Rainbow text engine, clean console output, merged failure badges, and floating controls
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
@@ -63,25 +63,28 @@ function Ui.buildOutputLines(runData, durationMs)
         table.insert(outputLines, string.format('<font color="%s"><b>[%s]</b></font>', Config.HEX_PURPLE, catName:upper()))
         for _, name in ipairs(runData.resultOrder) do
             local data = runData.results[name]
-            if data.cat == catName then
-                local badge = data.status == "PASS"
-                    and string.format('<font color="%s"><b>[PASS]</b></font>', Config.HEX_GREEN)
-                    or string.format('<font color="%s"><b>[FAIL]</b></font>', Config.HEX_RED)
+            if data and data.cat == catName then
+                local isCritical = (catName == "Integrity & Sandbox" or catName == "Security & Anti-Cheat" or name:find("jail") or name:find("freeze"))
+                
+                local badge
+                if data.status == "PASS" then
+                    badge = string.format('<font color="%s"><b>[PASS]</b></font>', Config.HEX_GREEN)
+                elseif isCritical then
+                    badge = string.format('<font color="%s"><b>[CRITICAL FAIL]</b></font>', Config.HEX_RED)
+                else
+                    badge = string.format('<font color="%s"><b>[WARNING]</b></font>', Config.HEX_YELLOW)
+                end
 
                 local lineIdx = #outputLines + 1
                 table.insert(outputLines, string.format(formatSpecifier, Config.HEX_WHITE, name, badge))
-                lineMetadata[lineIdx] = { status = data.status, isCritical = false }
+                lineMetadata[lineIdx] = { status = data.status, isCritical = isCritical }
                 
                 if data.status == "FAIL" then
-                    local isCritical = (catName == "Integrity & Sandbox" or catName == "Security & Anti-Cheat" or name:find("jail") or name:find("freeze"))
-                    local severityText = isCritical and "[CRITICAL FAILURE]" or "[WARNING]"
-                    local severityHex = isCritical and Config.HEX_RED or Config.HEX_YELLOW
-
                     local cleanErr = data.err or "Unknown error"
                     cleanErr = cleanErr:gsub("^.-:%d+:%s*", "")
 
                     local reasonIdx = #outputLines + 1
-                    table.insert(outputLines, string.format('      <font color="%s"><b>%s</b></font> <font color="%s"><i>↳ %s</i></font>', severityHex, severityText, Config.HEX_RED, cleanErr))
+                    table.insert(outputLines, string.format('      <font color="%s">↳ <i>%s</i></font>', Config.HEX_RED, cleanErr))
                     lineMetadata[reasonIdx] = { status = "FAIL", isCritical = isCritical }
                 end
             end
@@ -182,7 +185,6 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
             end)
         end
 
-        -- Floating standalone toolbar (docked top-right, avoids DevConsole text overlap entirely)
         local existingGui = CoreGui:FindFirstChild("AEGIS_ToolbarGui")
         if existingGui then existingGui:Destroy() end
 
@@ -258,18 +260,48 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
 
         btnCopy.MouseButton1Click:Connect(function()
             if setclipboard then
-                local report = {
-                    "--- AEGIS AUDIT REPORT ---",
-                    string.format("Software: %s (%s)", runData.execName, runData.execVersion),
-                    string.format("Exec Time: %.2fms", durationMs or 0),
-                    string.format("Score: %.1f%%", runData.weightedPct),
-                    "--------------------------"
-                }
-                for _, line in ipairs(outputLines) do
-                    if not line:find("PLACEHOLDER") and not line:find("========") then
-                        table.insert(report, (line:gsub("<[^>]+>", "")))
+                local report = {}
+                table.insert(report, "==================================================")
+                table.insert(report, "           AEGIS SECURITY AUDIT REPORT            ")
+                table.insert(report, "==================================================")
+                table.insert(report, string.format("Software  : %s", runData.execName))
+                table.insert(report, string.format("Version   : %s", runData.execVersion))
+                table.insert(report, string.format("Thread ID : %s", type(getthreadidentity) == "function" and tostring(getthreadidentity()) or "Unknown"))
+                table.insert(report, string.format("Exec Time : %.2fms", durationMs or 0))
+                table.insert(report, "==================================================")
+                table.insert(report, "                  RAW RESULTS                     ")
+                table.insert(report, "==================================================")
+
+                local formatSpec = string.format("   %%-%ds : %%s", runData.maxNameLength)
+                for _, catName in ipairs(Config.categoryOrder) do
+                    table.insert(report, string.format("[%s]", catName:upper()))
+                    for _, name in ipairs(runData.resultOrder) do
+                        local data = runData.results[name]
+                        if data and data.cat == catName then
+                            local isCritical = (catName == "Integrity & Sandbox" or catName == "Security & Anti-Cheat" or name:find("jail") or name:find("freeze"))
+                            local statusTag = data.status == "PASS" and "[PASS]" or (isCritical and "[CRITICAL FAIL]" or "[WARNING]")
+                            
+                            table.insert(report, string.format(formatSpec, name, statusTag))
+                            if data.status == "FAIL" then
+                                local rawErr = data.err or "Unknown error"
+                                rawErr = rawErr:gsub("^.-:%d+:%s*", "")
+                                table.insert(report, string.format("      ↳ %s", rawErr))
+                            end
+                        end
                     end
                 end
+
+                table.insert(report, "==================================================")
+                table.insert(report, "                    SUMMARY                       ")
+                table.insert(report, "==================================================")
+                table.insert(report, string.format("Passed    : %d", runData.passed))
+                table.insert(report, string.format("Failed    : %d", runData.failed))
+                table.insert(report, string.format("Total     : %d", runData.total))
+                table.insert(report, string.format("Raw Score : %.1f%%", runData.scorePct))
+                table.insert(report, string.format("Weighted  : %.1f%%", runData.weightedPct))
+                table.insert(report, string.format("Export    : %s / %s", Config.CSV_LOG_FILE, Config.JSON_LOG_FILE))
+                table.insert(report, "==================================================")
+
                 setclipboard(table.concat(report, "\n"))
                 btnCopy.Text = "COPIED"
                 task.wait(1)
