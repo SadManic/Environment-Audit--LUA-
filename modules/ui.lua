@@ -1,5 +1,5 @@
--- modules/ui.lua
--- Rainbow text engine, clean console output, merged failure badges, and floating controls
+-- ui.lua
+-- Rainbow text engine, rich-text console hook, merged failure badges, and exhaustive technical report export
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
@@ -81,8 +81,6 @@ function Ui.buildOutputLines(runData, durationMs)
                 
                 if data.status == "FAIL" then
                     local cleanErr = data.err or "Unknown error"
-                    cleanErr = cleanErr:gsub("^.-:%d+:%s*", "")
-
                     local reasonIdx = #outputLines + 1
                     table.insert(outputLines, string.format('      <font color="%s">↳ <i>%s</i></font>', Config.HEX_RED, cleanErr))
                     lineMetadata[reasonIdx] = { status = "FAIL", isCritical = isCritical }
@@ -144,10 +142,13 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
         local activeLabels = {}
         local labelsByLineIdx = {}
 
+        local targetRoot = devConsole or CoreGui:FindFirstChild("DevConsoleMaster") or CoreGui
+
         local function checkAndFormatLabel(obj)
             if obj:IsA("TextLabel") then
+                local objText = obj.Text
                 for idx, marker in ipairs(plainBuffer) do
-                    if obj.Text:find(marker, 1, true) then
+                    if objText:find(marker, 1, true) then
                         obj.RichText = true
                         activeLabels[idx] = obj
                         labelsByLineIdx[idx] = obj
@@ -174,12 +175,17 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
             end
         end
 
-        if devConsole then
-            for _, v in pairs(devConsole:GetDescendants()) do
-                checkAndFormatLabel(v)
-            end
+        for _, v in pairs(targetRoot:GetDescendants()) do
+            checkAndFormatLabel(v)
+        end
 
-            devConsole.DescendantAdded:Connect(function(desc)
+        targetRoot.DescendantAdded:Connect(function(desc)
+            task.wait()
+            checkAndFormatLabel(desc)
+        end)
+
+        if targetRoot ~= CoreGui then
+            CoreGui.DescendantAdded:Connect(function(desc)
                 task.wait()
                 checkAndFormatLabel(desc)
             end)
@@ -261,46 +267,51 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
         btnCopy.MouseButton1Click:Connect(function()
             if setclipboard then
                 local report = {}
-                table.insert(report, "==================================================")
-                table.insert(report, "           AEGIS SECURITY AUDIT REPORT            ")
-                table.insert(report, "==================================================")
-                table.insert(report, string.format("Software  : %s", runData.execName))
-                table.insert(report, string.format("Version   : %s", runData.execVersion))
-                table.insert(report, string.format("Thread ID : %s", type(getthreadidentity) == "function" and tostring(getthreadidentity()) or "Unknown"))
-                table.insert(report, string.format("Exec Time : %.2fms", durationMs or 0))
-                table.insert(report, "==================================================")
-                table.insert(report, "                  RAW RESULTS                     ")
-                table.insert(report, "==================================================")
+                table.insert(report, "================================================================================")
+                table.insert(report, "                     AEGIS ENVIRONMENT AUDIT REPORT                             ")
+                table.insert(report, "================================================================================")
+                table.insert(report, string.format("Host Software   : %s", runData.execName))
+                table.insert(report, string.format("Software Version: %s", runData.execVersion))
+                table.insert(report, string.format("Thread Identity : %s", type(getthreadidentity) == "function" and tostring(getthreadidentity()) or "Unknown"))
+                table.insert(report, string.format("Benchmark Time  : %.2f ms", durationMs or 0))
+                table.insert(report, string.format("Audit Score     : %.1f%% (Passed: %d | Failed: %d | Total: %d)", runData.scorePct, runData.passed, runData.failed, runData.total))
+                table.insert(report, string.format("Weighted Score  : %.1f%%", runData.weightedPct))
+                table.insert(report, "================================================================================")
+                table.insert(report, "                         TECHNICAL TEST ASSERTIONS                              ")
+                table.insert(report, "================================================================================")
 
-                local formatSpec = string.format("   %%-%ds : %%s", runData.maxNameLength)
                 for _, catName in ipairs(Config.categoryOrder) do
+                    table.insert(report, "")
                     table.insert(report, string.format("[%s]", catName:upper()))
+                    table.insert(report, string.rep("-", 80))
+
                     for _, name in ipairs(runData.resultOrder) do
                         local data = runData.results[name]
                         if data and data.cat == catName then
                             local isCritical = (catName == "Integrity & Sandbox" or catName == "Security & Anti-Cheat" or name:find("jail") or name:find("freeze"))
-                            local statusTag = data.status == "PASS" and "[PASS]" or (isCritical and "[CRITICAL FAIL]" or "[WARNING]")
+                            local tag = data.status == "PASS" and "[PASS]" or (isCritical and "[CRITICAL FAIL]" or "[WARNING]")
+
+                            table.insert(report, string.format("TEST      : %s", name))
+                            table.insert(report, string.format("STATUS    : %s", tag))
                             
-                            table.insert(report, string.format(formatSpec, name, statusTag))
-                            if data.status == "FAIL" then
-                                local rawErr = data.err or "Unknown error"
-                                rawErr = rawErr:gsub("^.-:%d+:%s*", "")
-                                table.insert(report, string.format("      ↳ %s", rawErr))
+                            if data.detail and data.detail ~= "" then
+                                table.insert(report, string.format("EVALUATION: %s", data.detail))
                             end
+
+                            if data.status == "FAIL" then
+                                local rawErr = data.err or "Unknown Exception"
+                                table.insert(report, string.format("EXCEPTION : %s", rawErr))
+                            end
+
+                            table.insert(report, string.rep(".", 40))
                         end
                     end
                 end
 
-                table.insert(report, "==================================================")
-                table.insert(report, "                    SUMMARY                       ")
-                table.insert(report, "==================================================")
-                table.insert(report, string.format("Passed    : %d", runData.passed))
-                table.insert(report, string.format("Failed    : %d", runData.failed))
-                table.insert(report, string.format("Total     : %d", runData.total))
-                table.insert(report, string.format("Raw Score : %.1f%%", runData.scorePct))
-                table.insert(report, string.format("Weighted  : %.1f%%", runData.weightedPct))
-                table.insert(report, string.format("Export    : %s / %s", Config.CSV_LOG_FILE, Config.JSON_LOG_FILE))
-                table.insert(report, "==================================================")
+                table.insert(report, "")
+                table.insert(report, "================================================================================")
+                table.insert(report, "                               END OF REPORT                                    ")
+                table.insert(report, "================================================================================")
 
                 setclipboard(table.concat(report, "\n"))
                 btnCopy.Text = "COPIED"
