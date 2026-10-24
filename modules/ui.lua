@@ -27,30 +27,6 @@ function Ui.getAnimatedRainbowText(text, timeOffset)
             result = result .. string.format('<font color="%s">%s</font>', hexColor, char)
         end
     end
-    return "<b>" + result + "</b>" -- wait, Lua concatenation uses .. instead of +
-end
-
--- Fixed string concatenation for the return statement
-function Ui.getAnimatedRainbowText(text, timeOffset)
-    local result = ""
-    local len = #text
-    timeOffset = timeOffset or 0
-
-    for i = 1, len do
-        local char = text:sub(i, i)
-        if char == " " then
-            result = result .. " "
-        else
-            local hue = ((i / len) + (timeOffset * 0.4)) % 1
-            local color = Color3.fromHSV(hue, 0.85, 1)
-            local hexColor = string.format("#%02X%02X%02X",
-                math.floor(color.R * 255),
-                math.floor(color.G * 255),
-                math.floor(color.B * 255)
-            )
-            result = result .. string.format('<font color="%s">%s</font>', hexColor, char)
-        end
-    end
     return "<b>" .. result .. "</b>"
 end
 
