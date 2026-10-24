@@ -20,8 +20,9 @@ Config.CAT_BASE = "UNC Baseline"
 Config.CAT_TECH = "Debug & Reflection"
 Config.CAT_ADV  = "Extra APIs"
 Config.CAT_INT  = "Integrity & Sandbox"
+Config.CAT_SEC  = "Security & Anti-Cheat"
 
-Config.categoryOrder = { Config.CAT_BASE, Config.CAT_TECH, Config.CAT_ADV, Config.CAT_INT }
+Config.categoryOrder = { Config.CAT_BASE, Config.CAT_TECH, Config.CAT_ADV, Config.CAT_INT, Config.CAT_SEC }
 
 -- baseline tests count more than the extras
 Config.CATEGORY_WEIGHT = {
@@ -29,6 +30,7 @@ Config.CATEGORY_WEIGHT = {
     [Config.CAT_TECH] = 2,
     [Config.CAT_INT]  = 2,
     [Config.CAT_ADV]  = 1,
+    [Config.CAT_SEC]  = 2,
 }
 
 -- log file names, appended every run
