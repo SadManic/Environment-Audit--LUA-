@@ -1,27 +1,20 @@
 -- main.lua
 -- entrypoint. grabs every module straight off github, cache-busted, then runs the suite.
---
--- usage (paste into your executor):
--- loadstring(game:HttpGet("https://raw.githubusercontent.com/SadManic/Environment-Audit--LUA-/main/modules/main.lua"))()
 
 task.wait(0.1)
 
 local REPO_OWNER  = "SadManic"
 local REPO_NAME   = "Environment-Audit--LUA-"
 local REPO_BRANCH = "main"
-local REPO_PATH   = "modules" -- folder in the repo that holds the .lua modules[cite: 5]
+local REPO_PATH   = "modules"
 
 local BASE_URL = string.format(
     "https://raw.githubusercontent.com/%s/%s/%s/%s/",
     REPO_OWNER, REPO_NAME, REPO_BRANCH, REPO_PATH
 )
 
--- cache so we don't refetch a module every time something imports it
 local moduleCache = {}
 
--- fetches "<name>.lua" from the repo, cache-busted so we're never stuck on a stale
--- copy, compiles it, runs it, and caches the result. modules call import() themselves
--- to grab their own deps so load order doesn't matter.
 function import(name)
     if moduleCache[name] then
         return moduleCache[name]
@@ -50,7 +43,6 @@ function import(name)
     return result
 end
 
--- load modules (lowercase to match your GitHub repository files)[cite: 7]
 local Config = import("config")
 local Tests  = import("tests")
 local Ui     = import("ui")
@@ -58,7 +50,6 @@ local Logger = import("logger")
 
 Config.log("INIT", "Diagnostic suite starting, waiting for environment to settle", "INFO")
 
--- devconsole is optional, just enables the rich-text panel if it's around
 local CoreGui = game:GetService("CoreGui")
 local devConsole = nil
 pcall(function()
@@ -69,6 +60,9 @@ Config.log("INIT", devConsole
     or "DevConsoleMaster not found, falling back to plain print output",
     devConsole and "INFO" or "WARN")
 
+-- 1. Start benchmark timer
+local startTime = tick()
+
 -- run the suite
 local runData = Tests.run()
 
@@ -76,9 +70,12 @@ local runData = Tests.run()
 runData.EXPORT_ENABLED = Logger.EXPORT_ENABLED
 runData.jsonExportStatus = Logger.export(runData)
 
--- render output
-local outputLines, animatedLineIndices = Ui.buildOutputLines(runData)
-local plainBuffer = Ui.printPlain(outputLines, animatedLineIndices)
-Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer)
+-- 2. End benchmark timer
+local durationMs = (tick() - startTime) * 1000
 
-Config.log("DONE", "Diagnostic suite finished", "INFO")
+-- render output with benchmark time and interactive hooks
+local outputLines, animatedLineIndices, filterMarker, copyMarker = Ui.buildOutputLines(runData, durationMs)
+local plainBuffer = Ui.printPlain(outputLines, animatedLineIndices)
+Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, runData, durationMs, filterMarker, copyMarker)
+
+Config.log("DONE", string.format("Diagnostic suite finished in %.1fms", durationMs), "INFO")
