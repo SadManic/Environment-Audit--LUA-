@@ -1,20 +1,19 @@
 -- main.lua
--- entrypoint. grabs every module straight off GitHub, cache-busted, then runs the suite.
+-- entrypoint. grabs every module straight off github, cache-busted, then runs the suite.
 --
 -- usage (paste into your executor):
--- loadstring(game:HttpGet("https://raw.githubusercontent.com/SadManic/Environment-Audit--LUA-/main/main.lua"))()
+-- loadstring(game:HttpGet("https://raw.githubusercontent.com/SadManic/Environment-Audit--LUA-/main/modules/main.lua"))()
 
 task.wait(0.1)
 
 local REPO_OWNER  = "SadManic"
 local REPO_NAME   = "Environment-Audit--LUA-"
 local REPO_BRANCH = "main"
--- Set to empty ("") since your files are in the root directory of the repo
-local REPO_PATH   = "" 
+local REPO_PATH   = "modules" -- folder in the repo that holds the .lua modules[cite: 5]
 
 local BASE_URL = string.format(
-    "https://raw.githubusercontent.com/%s/%s/%s/%s",
-    REPO_OWNER, REPO_NAME, REPO_BRANCH, REPO_PATH ~= "" and (REPO_PATH .. "/") or ""
+    "https://raw.githubusercontent.com/%s/%s/%s/%s/",
+    REPO_OWNER, REPO_NAME, REPO_BRANCH, REPO_PATH
 )
 
 -- cache so we don't refetch a module every time something imports it
@@ -51,11 +50,11 @@ function import(name)
     return result
 end
 
--- load modules
-local Config = import("Config")
-local Tests  = import("Tests")
-local Ui     = import("Ui")
-local Logger = import("Logger")
+-- load modules (lowercase to match your GitHub repository files)[cite: 7]
+local Config = import("config")
+local Tests  = import("tests")
+local Ui     = import("ui")
+local Logger = import("logger")
 
 Config.log("INIT", "Diagnostic suite starting, waiting for environment to settle", "INFO")
 
