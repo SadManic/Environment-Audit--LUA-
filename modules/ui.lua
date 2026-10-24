@@ -7,7 +7,7 @@ local RunService = game:GetService("RunService")
 
 local Ui = {}
 
--- colors shift over time
+-- colors shift over time using your exact HSV pulse engine
 function Ui.getAnimatedRainbowText(text, timeOffset)
     local result = ""
     local len = #text
@@ -38,16 +38,16 @@ function Ui.buildOutputLines(runData)
     local outputLines = {}
     local animatedLineIndices = {}
 
-    -- header (animated)
+    -- header (animated with AEGIS branding)
     table.insert(outputLines, "HEADER_ANIMATED_PLACEHOLDER")
-    animatedLineIndices[1] = "ENVIRONMENT AUDIT — LUA"
+    animatedLineIndices[1] = "AEGIS // SECURITY AUDIT"
 
     table.insert(outputLines, string.format('<font color="%s"><b>Software  :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execName))
     table.insert(outputLines, string.format('<font color="%s"><b>Version   :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execVersion))
     table.insert(outputLines, string.format('<font color="%s"><b>Thread ID :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, type(getthreadidentity) == "function" and tostring(getthreadidentity()) or "Unknown"))
     table.insert(outputLines, string.format('<font color="%s"><i>⏳ Checks complete!</i></font>', Config.HEX_CYAN))
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
-    table.insert(outputLines, string.format('<font color="%s"><b>                  DETAILED LOGS                  </b></font>', Config.HEX_CYAN))
+    table.insert(outputLines, string.format('<font color="%s"><b>                    DETAILED LOGS                   </b></font>', Config.HEX_CYAN))
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
 
     local formatSpecifier = string.format('   <font color="%%s">%%-%ds</font> : %%s', runData.maxNameLength)
@@ -140,7 +140,7 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                         -- lock text so it doesn't get overwritten
                         if not animatedLineIndices[idx] then
                             local targetRichText = outputLines[idx]
-                            obj.Text = targetRichText
+                            obj.Text = targetRichTest
 
                             local isUpdating = false
                             obj:GetPropertyChangedSignal("Text"):Connect(function()
@@ -178,7 +178,7 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                 local label = activeLabels[idx]
                 if label and label.Parent then
                     if idx == 1 then
-                        label.Text = "📌 " .. Ui.getAnimatedRainbowText(rawText, now) .. " 📌"
+                        label.Text = "🛡️ " .. Ui.getAnimatedRainbowText(rawText, now) .. " 🛡️"
                     else
                         label.Text = Ui.getAnimatedRainbowText(rawText, now)
                     end
