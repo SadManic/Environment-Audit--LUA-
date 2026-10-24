@@ -1,10 +1,9 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook with clean UI elements toolbar
+-- rainbow text gen, output line rendering, devconsole hook with transparent container row
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
 
-val = {} -- placeholder safeguard
 local Ui = {}
 
 -- Clean per-letter HSV pulse engine
@@ -56,16 +55,14 @@ function Ui.buildOutputLines(runData, durationMs)
     table.insert(outputLines, string.format('<font color="%s"><b>Thread ID :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, type(getthreadidentity) == "function" and tostring(getthreadidentity()) or "Unknown"))
     table.insert(outputLines, string.format('<font color="%s"><i>[+] Checks complete!</i></font>', Config.HEX_CYAN))
     
-    -- Detailed Logs Header with a dedicated interactive Toolbar row right below it
     local toolbarMarker = " [TOOLBAR_UI_MARKER]"
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
     table.insert(outputLines, string.format('<font color="%s"><b>                    DETAILED LOGS                   </b></font>', Config.HEX_CYAN))
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
-    table.insert(outputLines, '<font color="#808080"><b>[FILTER: ALL]</b></font>' .. toolbarMarker)
+    table.insert(outputLines, " " .. toolbarMarker)
 
     local formatSpecifier = string.format('   <font color="%%s">%%-%ds</font> : %%s', runData.maxNameLength)
 
-    -- use resultOrder so this prints in the same order every run
     for _, catName in ipairs(Config.categoryOrder) do
         table.insert(outputLines, string.format('<font color="%s"><b>[%s]</b></font>', Config.HEX_PURPLE, catName:upper()))
         for _, name in ipairs(runData.resultOrder) do
@@ -121,7 +118,6 @@ function Ui.buildOutputLines(runData, durationMs)
     return outputLines, animatedLineIndices, toolbarMarker
 end
 
--- print it all, tag each line with a unique session stamp + marker
 function Ui.printPlain(outputLines, animatedLineIndices)
     Config.log("RENDER", string.format("Built %d output lines, printing to console", #outputLines), "INFO")
 
@@ -142,7 +138,6 @@ function Ui.printPlain(outputLines, animatedLineIndices)
     return plainBuffer
 end
 
--- attach dev console with clean UI elements toolbar
 function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, runData, durationMs, toolbarMarker)
     if not devConsole then
         Config.log("RENDER", "Skipping rich-text formatter, no DevConsole available", "INFO")
@@ -166,11 +161,17 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                             if idx <= #outputLines then
                                 local targetRichText = outputLines[idx]
                                 if targetRichText then
-                                    -- Toolbar Row Setup (Clean UI Container)
                                     if targetRichText:find(toolbarMarker, 1, true) then
-                                        obj.Text = "" -- Clear underlying text completely to prevent duplication
+                                        -- Force native printed text completely invisible so it cannot bleed through
+                                        obj.TextTransparency = 1
+                                        obj.Text = " "
+
+                                        if obj:FindFirstChild("AEGIS_Toolbar") then
+                                            obj.AEGIS_Toolbar:Destroy()
+                                        end
 
                                         local toolbarFrame = Instance.new("Frame")
+                                        toolbarFrame.Name = "AEGIS_Toolbar"
                                         toolbarFrame.BackgroundTransparency = 1
                                         toolbarFrame.Size = UDim2.new(1, 0, 1, 0)
                                         toolbarFrame.Position = UDim2.new(0, 0, 0, 0)
@@ -178,10 +179,10 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
 
                                         local statusLbl = Instance.new("TextLabel")
                                         statusLbl.Text = "[FILTER: ALL]"
-                                        statusLbl.TextColor3 = Color3.fromRGB(128, 128, 128)
+                                        statusLbl.TextColor3 = Color3.fromRGB(130, 130, 130)
                                         statusLbl.BackgroundTransparency = 1
-                                        statusLbl.Size = UDim2.new(0, 120, 1, 0)
-                                        statusLbl.Position = UDim2.new(0, 5, 0, 0)
+                                        statusLbl.Size = UDim2.new(0, 110, 1, 0)
+                                        statusLbl.Position = UDim2.new(0, 2, 0, 0)
                                         statusLbl.Font = Enum.Font.Code
                                         statusLbl.TextSize = 11
                                         statusLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -192,7 +193,7 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                                             btn.Text = name
                                             btn.TextColor3 = color
                                             btn.BackgroundTransparency = 0.3
-                                            btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                                            btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
                                             btn.Size = UDim2.new(0, width, 0, 18)
                                             btn.Position = UDim2.new(0, posX, 0.5, -9)
                                             btn.Font = Enum.Font.Code
@@ -201,14 +202,13 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                                             return btn
                                         end
 
-                                        local btnAll = createButton("ALL", 130, 48, Color3.fromRGB(200, 200, 200))
-                                        local btnCrit = createButton("CRIT", 182, 48, Color3.fromRGB(255, 100, 100))
-                                        local btnFail = createButton("FAIL", 234, 48, Color3.fromRGB(255, 165, 0))
-                                        local copyBtn = createButton("COPY", 286, 56, Color3.fromRGB(100, 255, 100))
+                                        local btnAll  = createButton("ALL", 120, 46, Color3.fromRGB(210, 210, 210))
+                                        local btnCrit = createButton("CRIT", 172, 46, Color3.fromRGB(255, 95, 95))
+                                        local btnFail = createButton("FAIL", 224, 46, Color3.fromRGB(255, 170, 0))
+                                        local copyBtn = createButton("COPY", 276, 54, Color3.fromRGB(110, 255, 110))
 
                                         local function applyFilter(filterType)
                                             statusLbl.Text = "[FILTER: " .. filterType .. "]"
-                                            
                                             for lineIdx, lineLabels in pairs(resultLines) do
                                                 local shouldShow = true
                                                 local lineText = outputLines[lineIdx] or ""
@@ -254,6 +254,19 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                                                 copyBtn.Text = "COPY"
                                             end
                                         end)
+
+                                        -- Guard against DevConsole resetting Text or TextTransparency
+                                        local isLocking = false
+                                        local function enforceHidden()
+                                            if not isLocking and (obj.TextTransparency ~= 1 or obj.Text ~= " ") then
+                                                isLocking = true
+                                                obj.TextTransparency = 1
+                                                obj.Text = " "
+                                                isLocking = false
+                                            end
+                                        end
+                                        obj:GetPropertyChangedSignal("Text"):Connect(enforceHidden)
+                                        obj:GetPropertyChangedSignal("TextTransparency"):Connect(enforceHidden)
                                     else
                                         obj.Text = targetRichText
                                         local isUpdating = false
@@ -291,7 +304,6 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
             checkAndFormatLabel(desc)
         end)
 
-        -- ~30fps update loop for smooth pulsing headers
         local lastUpdate = 0
         RunService.RenderStepped:Connect(function()
             local now = tick()
