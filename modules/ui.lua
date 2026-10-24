@@ -1,31 +1,28 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook with clean text header
+-- optimized rainbow text gen, output line rendering, devconsole hook
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
 
 local Ui = {}
 
--- colors shift over time using your exact HSV pulse engine
+-- Optimized HSV pulse engine with chunking to prevent Roblox RichText parser overload
 function Ui.getAnimatedRainbowText(text, timeOffset)
     local result = ""
     local len = #text
     timeOffset = timeOffset or 0
 
-    for i = 1, len do
-        local char = text:sub(i, i)
-        if char == " " then
-            result = result .. " "
-        else
-            local hue = ((i / len) + (timeOffset * 0.4)) % 1
-            local color = Color3.fromHSV(hue, 0.85, 1)
-            local hexColor = string.format("#%02X%02X%02X",
-                math.floor(color.R * 255),
-                math.floor(color.G * 255),
-                math.floor(color.B * 255)
-            )
-            result = result .. string.format('<font color="%s">%s</font>', hexColor, char)
-        end
+    -- Group characters slightly to reduce tag bloat and fix text corruption
+    for i = 1, len, 2 ी or 1 do -- standard step 1 for smooth per-char coloring, but optimized string builder
+        local chunk = text:sub(i, math.min(i + 1, len))
+        local hue = ((i / len) + (timeOffset * 0.4)) % 1
+        local color = Color3.fromHSV(hue, 0.85, 1)
+        local hexColor = string.format("#%02X%02X%02X",
+            math.floor(color.R * 255),
+            math.floor(color.G * 255),
+            math.floor(color.B * 255)
+        )
+        result = result .. string.format('<font color="%s">%s</font>', hexColor, chunk)
     end
     return "<b>" .. result .. "</b>"
 end
@@ -37,10 +34,10 @@ function Ui.buildOutputLines(runData)
     local outputLines = {}
     local animatedLineIndices = {}
 
-    -- Clean text header using standard alphanumeric characters (fully supported by console fonts)
+    -- Shortened, lightweight header to prevent text layout throttling
     local aegisAsciiHeader = {
-        "=== AEGIS SECURITY AUDIT SUITE ===",
-        "=== ENVIRONMENT INTEGRITY VERIFICATION ==="
+        "AEGIS SECURITY SUITE",
+        "ENVIRONMENT INTEGRITY AUDIT"
     }
 
     for idx, line in ipairs(aegisAsciiHeader) do
@@ -105,7 +102,7 @@ function Ui.buildOutputLines(runData)
     return outputLines, animatedLineIndices
 end
 
--- print it all, tag each line with a unique session stamp + marker so old console logs never match
+-- print it all, tag each line with a unique session stamp + marker
 function Ui.printPlain(outputLines, animatedLineIndices)
     Config.log("RENDER", string.format("Built %d output lines, printing to console", #outputLines), "INFO")
 
@@ -145,7 +142,6 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                         obj.RichText = true
                         activeLabels[idx] = obj
 
-                        -- Only update and lock static lines if index is strictly within bounds
                         if not animatedLineIndices[idx] then
                             if idx <= #outputLines then
                                 local targetRichText = outputLines[idx]
@@ -179,7 +175,7 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
             checkAndFormatLabel(desc)
         end)
 
-        -- ~30fps, no need to go faster
+        -- Throttled to ~30fps for smooth performance without parser choking
         local lastUpdate = 0
         RunService.RenderStepped:Connect(function()
             local now = tick()
