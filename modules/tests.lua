@@ -1,7 +1,7 @@
 -- tests.lua
 -- the actual test runner + all the test defs
 
-local config = import("config") -- Fixed casing from "config" to "Config"
+local Config = import("config") -- Fixed casing from "config" to "Config"
 
 local Tests = {}
 
