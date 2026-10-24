@@ -1,7 +1,7 @@
 -- main.lua
--- entrypoint. grabs every module straight off github, cache-busted, then runs the suite.
+-- Entrypoint for AEGIS security suite.
 --
--- usage (paste into your executor):
+-- Usage:
 -- loadstring(game:HttpGet("https://raw.githubusercontent.com/SadManic/Environment-Audit--LUA-/main/modules/main.lua"))()
 
 task.wait(0.1)
@@ -16,12 +16,8 @@ local BASE_URL = string.format(
     REPO_OWNER, REPO_NAME, REPO_BRANCH, REPO_PATH
 )
 
--- cache so we don't refetch a module every time something imports it
 local moduleCache = {}
 
--- fetches "<name>.lua" from the repo, cache-busted so we're never stuck on a stale
--- copy, compiles it, runs it, and caches the result. modules call import() themselves
--- to grab their own deps so load order doesn't matter.
 function import(name)
     if moduleCache[name] then
         return moduleCache[name]
@@ -50,15 +46,14 @@ function import(name)
     return result
 end
 
--- load modules
+-- Import dependencies
 local Config = import("config")
 local Tests  = import("tests")
 local Ui     = import("ui")
 local Logger = import("logger")
 
-Config.log("INIT", "Diagnostic suite starting, waiting for environment to settle", "INFO")
+Config.log("INIT", "AEGIS suite starting, waiting for environment to settle", "INFO")
 
--- devconsole check for rich-text panel
 local CoreGui = game:GetService("CoreGui")
 local devConsole = nil
 pcall(function()
@@ -66,13 +61,13 @@ pcall(function()
 end)
 Config.log("INIT", devConsole
     and "DevConsoleMaster located, rich-text rendering available"
-    or "DevConsoleMaster not found, falling back to plain print output",
+    or "DevConsoleMaster not immediately found, fallback listeners engaged",
     devConsole and "INFO" or "WARN")
 
--- 1. Benchmark start
+-- 1. Precision benchmark start
 local startTime = tick()
 
--- 2. Run diagnostic tests
+-- 2. Execute test suite
 local runData = Tests.run()
 
 -- 3. Export CSV and JSON logs
@@ -82,9 +77,9 @@ runData.jsonExportStatus = Logger.export(runData)
 -- 4. Benchmark finish
 local durationMs = (tick() - startTime) * 1000
 
--- 5. Render output lines and attach interactive controls
+-- 5. Format output and mount floating controller
 local outputLines, animatedLineIndices, lineMetadata = Ui.buildOutputLines(runData, durationMs)
 local plainBuffer = Ui.printPlain(outputLines, animatedLineIndices)
 Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, lineMetadata, runData, durationMs)
 
-Config.log("DONE", string.format("Diagnostic suite finished in %.2fms", durationMs), "INFO")
+Config.log("DONE", string.format("AEGIS suite run finished in %.2f ms", durationMs), "INFO")
