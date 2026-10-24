@@ -1,19 +1,20 @@
 -- main.lua
--- entrypoint. grabs every module straight off github, cache-busted, then runs the suite.
+-- entrypoint. grabs every module straight off GitHub, cache-busted, then runs the suite.
 --
 -- usage (paste into your executor):
---   loadstring(game:HttpGet("https://raw.githubusercontent.com/SadManic/Environment-Audit--LUA-/main/modules/main.lua"))()
+-- loadstring(game:HttpGet("https://raw.githubusercontent.com/SadManic/Environment-Audit--LUA-/main/main.lua"))()
 
 task.wait(0.1)
 
 local REPO_OWNER  = "SadManic"
 local REPO_NAME   = "Environment-Audit--LUA-"
 local REPO_BRANCH = "main"
-local REPO_PATH   = "modules" -- folder in the repo that holds the .lua modules
+-- Set to empty ("") since your files are in the root directory of the repo
+local REPO_PATH   = "" 
 
 local BASE_URL = string.format(
-    "https://raw.githubusercontent.com/%s/%s/%s/%s/",
-    REPO_OWNER, REPO_NAME, REPO_BRANCH, REPO_PATH
+    "https://raw.githubusercontent.com/%s/%s/%s/%s",
+    REPO_OWNER, REPO_NAME, REPO_BRANCH, REPO_PATH ~= "" and (REPO_PATH .. "/") or ""
 )
 
 -- cache so we don't refetch a module every time something imports it
