@@ -1,5 +1,5 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook with repositioned software info
+-- rainbow text gen, output line rendering, devconsole hook with interactive filters and clipboard
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
@@ -27,11 +27,35 @@ function Ui.getAnimatedRainbowText(text, timeOffset)
             result = result .. string.format('<font color="%s">%s</font>', hexColor, char)
         end
     end
+    return "<b>" + result + "</b>" -- fixed string concatenation if needed, or stick to ..
+end
+
+-- Fix string concat for safety
+function Ui.getAnimatedRainbowText(text, timeOffset)
+    local result = ""
+    local len = #text
+    timeOffset = timeOffset or 0
+
+    for i = 1, len do
+        local char = text:sub(i, i)
+        if char == " " then
+            result = result .. " "
+        else
+            local hue = ((i / len) + (timeOffset * 0.4)) % 1
+            local color = Color3.fromHSV(hue, 0.85, 1)
+            local hexColor = string.format("#%02X%02X%02X",
+                math.floor(color.R * 255),
+                math.floor(color.G * 255),
+                math.floor(color.B * 255)
+            )
+            result = result .. string.format('<font color="%s">%s</font>', hexColor, char)
+        end
+    end
     return "<b>" .. result .. "</b>"
 end
 
 -- build the output lines from a finished run
-function Ui.buildOutputLines(runData)
+function Ui.buildOutputLines(runData, durationMs)
     Config.log("RENDER", "Assembling output lines and computing scores", "INFO")
 
     local outputLines = {}
@@ -48,13 +72,17 @@ function Ui.buildOutputLines(runData)
         animatedLineIndices[idx] = line
     end
 
-    -- Software info moved right below the header
+    -- Benchmark & Software Info at the top
+    table.insert(outputLines, string.format('<font color="%s"><b>Exec Time :</b></font> <font color="%s">%.2fms</font>', Config.HEX_PURPLE, Config.HEX_CYAN, durationMs or 0))
     table.insert(outputLines, string.format('<font color="%s"><b>Software  :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execName))
     table.insert(outputLines, string.format('<font color="%s"><b>Version   :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execVersion))
     table.insert(outputLines, string.format('<font color="%s"><b>Thread ID :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, type(getthreadidentity) == "function" and tostring(getthreadidentity()) or "Unknown"))
     table.insert(outputLines, string.format('<font color="%s"><i>[+] Checks complete!</i></font>', Config.HEX_CYAN))
+    
+    local filterMarker = " [FILTER_UI_MARKER]"
+    local copyMarker = " [COPY_UI_MARKER]"
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
-    table.insert(outputLines, string.format('<font color="%s"><b>                    DETAILED LOGS                   </b></font>', Config.HEX_CYAN))
+    table.insert(outputLines, string.format('<font color="%s"><b>                    DETAILED LOGS                   </b></font>%s%s', Config.HEX_CYAN, filterMarker, copyMarker))
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
 
     local formatSpecifier = string.format('   <font color="%%s">%%-%ds</font> : %%s', runData.maxNameLength)
@@ -69,9 +97,10 @@ function Ui.buildOutputLines(runData)
                     and string.format('<font color="%s"><b>[PASS]</b></font>', Config.HEX_GREEN)
                     or string.format('<font color="%s"><b>[FAIL]</b></font>', Config.HEX_RED)
 
-                table.insert(outputLines, string.format(formatSpecifier, Config.HEX_WHITE, name, badge))
+                local lineIdx = #outputLines + 1
+                local filterTag = string.format(" [FID:%d:%s]", lineIdx, data.status)
+                table.insert(outputLines, string.format(formatSpecifier, Config.HEX_WHITE, name, badge) .. filterTag)
                 
-                -- Explicit failure severity and error reason lines
                 if data.status == "FAIL" then
                     local isCritical = (catName == "Integrity & Sandbox" or catName == "Security & Anti-Cheat" or name:find("jail") or name:find("freeze"))
                     local severityText = isCritical and "[CRITICAL FAILURE]" or "[WARNING]"
@@ -80,7 +109,7 @@ function Ui.buildOutputLines(runData)
                     local cleanErr = data.err or "Unknown error"
                     cleanErr = cleanErr:gsub("^.-:%d+:%s*", "")
 
-                    table.insert(outputLines, string.format('      <font color="%s"><b>%s</b></font> <font color="%s"><i>↳ %s</i></font>', severityHex, severityText, Config.HEX_RED, cleanErr))
+                    table.insert(outputLines, string.format('      <font color="%s"><b>%s</b></font> <font color="%s"><i>↳ %s</i></font>', severityHex, severityText, Config.HEX_RED, cleanErr) .. filterTag)
                 end
             end
         end
@@ -94,7 +123,6 @@ function Ui.buildOutputLines(runData)
 
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
 
-    -- summary line (animated)
     local summaryIdx = #outputLines + 1
     table.insert(outputLines, "SUMMARY_ANIMATED_PLACEHOLDER")
     animatedLineIndices[summaryIdx] = "SUMMARY"
@@ -112,7 +140,7 @@ function Ui.buildOutputLines(runData)
             or "disabled (no writefile/readfile)"))
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
 
-    return outputLines, animatedLineIndices
+    return outputLines, animatedLineIndices, filterMarker, copyMarker
 end
 
 -- print it all, tag each line with a unique session stamp + marker
@@ -136,8 +164,8 @@ function Ui.printPlain(outputLines, animatedLineIndices)
     return plainBuffer
 end
 
--- rainbow text in dev console if its open
-function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer)
+-- attach dev console with interactive buttons and filters
+function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, runData, durationMs, filterMarker, copyMarker)
     if not devConsole then
         Config.log("RENDER", "Skipping rich-text formatter, no DevConsole available", "INFO")
         return
@@ -147,6 +175,7 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
 
     task.spawn(function()
         local activeLabels = {}
+        local resultLines = {}
 
         local function checkAndFormatLabel(obj)
             if obj:IsA("TextLabel") then
@@ -161,16 +190,116 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                                 if targetRichText then
                                     obj.Text = targetRichText
 
-                                    local isUpdating = false
-                                    obj:GetPropertyChangedSignal("Text"):Connect(function()
-                                        if not isUpdating and obj.Text ~= targetRichText then
-                                            isUpdating = true
-                                            obj.RichText = true
-                                            obj.Text = targetRichText
-                                            isUpdating = false
+                                    -- Filter Button Setup
+                                    if targetRichText:find(filterMarker, 1, true) then
+                                        obj.Text = targetRichText:gsub(filterMarker, "") .. "  <font color=\"#808080\">[FILTER: ALL]</font>"
+                                        
+                                        local buttonFrame = Instance.new("Frame")
+                                        buttonFrame.BackgroundTransparency = 1
+                                        buttonFrame.Size = UDim2.new(0, 200, 0, 20)
+                                        buttonFrame.Position = UDim2.new(1, -205, 0, 0)
+                                        buttonFrame.Parent = obj
+                                        
+                                        local function createButton(name, posX, color)
+                                            local btn = Instance.new("TextButton")
+                                            btn.Text = name
+                                            btn.TextColor3 = color
+                                            btn.BackgroundTransparency = 0.5
+                                            btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+                                            btn.Size = UDim2.new(0, 62, 1, 0)
+                                            btn.Position = UDim2.new(0, posX, 0, 0)
+                                            btn.Font = Enum.Font.Code
+                                            btn.TextSize = 11
+                                            btn.Parent = buttonFrame
+                                            return btn
                                         end
-                                    end)
+
+                                        local btnAll = createButton("ALL", 0, Color3.fromRGB(200,200,200))
+                                        local btnCrit = createButton("CRIT", 66, Color3.fromRGB(255, 100, 100))
+                                        local btnFail = createButton("FAIL", 132, Color3.fromRGB(255, 165, 0))
+                                        
+                                        local function applyFilter(filterType)
+                                            obj.Text = targetRichText:gsub(filterMarker, "") .. "  <font color=\"#808080\">[FILTER: " .. filterType .. "]</font>"
+                                            
+                                            for lineIdx, lineLabels in pairs(resultLines) do
+                                                local shouldShow = true
+                                                local lineText = outputLines[lineIdx] or ""
+                                                if filterType == "CRIT" then
+                                                    local isCritLine = lineText:find("%[CRITICAL FAILURE%]") or not lineText:find("%[FID:")
+                                                    shouldShow = lineText:find("%[CRITICAL FAILURE%]") ~= nil
+                                                elseif filterType == "FAIL" then
+                                                    shouldShow = lineText:find("FAIL") ~= nil
+                                                end
+                                                for _, lbl in ipairs(lineLabels) do
+                                                    if lbl and lbl.Parent then
+                                                        lbl.Parent.Visible = shouldShow
+                                                    end
+                                                end
+                                            end
+                                        end
+
+                                        btnAll.MouseButton1Click:Connect(function() applyFilter("ALL") end)
+                                        btnCrit.MouseButton1Click:Connect(function() applyFilter("CRIT") end)
+                                        btnFail.MouseButton1Click:Connect(function() applyFilter("FAIL") end)
+
+                                    -- Copy Button Setup
+                                    elseif targetRichText:find(copyMarker, 1, true) then
+                                        obj.Text = targetRichText:gsub(copyMarker, "")
+                                        local copyBtn = Instance.new("TextButton")
+                                        copyBtn.Text = "[COPY]"
+                                        copyBtn.TextColor3 = Color3.fromRGB(100, 255, 100)
+                                        copyBtn.BackgroundTransparency = 0.5
+                                        copyBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+                                        copyBtn.Size = UDim2.new(0, 70, 1, 0)
+                                        copyBtn.Position = UDim2.new(1, -75, 0, 0)
+                                        copyBtn.Font = Enum.Font.Code
+                                        copyBtn.TextSize = 11
+                                        copyBtn.Parent = obj
+                                        
+                                        copyBtn.MouseButton1Click:Connect(function()
+                                            if setclipboard then
+                                                local report = {}
+                                                table.insert(report, "--- AEGIS SECURITY AUDIT REPORT ---")
+                                                table.insert(report, string.format("Software: %s (%s)", runData.execName, runData.execVersion))
+                                                table.insert(report, string.format("Exec Time: %.2fms", durationMs or 0))
+                                                table.insert(report, string.format("Score: %.1f%%", runData.weightedPct))
+                                                table.insert(report, "----------------------------------")
+                                                for _, line in ipairs(outputLines) do
+                                                    if not line:find("PLACEHOLDER") and not line:find("=================") and not line:find(" [FID") then
+                                                        table.insert(report, line:gsub("<[^>]+>", ""))
+                                                    elseif line:find(" [FID") and (line:find("FAIL") or line:find("CRITICAL")) then
+                                                        table.insert(report, line:gsub(" %[FID:.*", ""):gsub("<[^>]+>", ""))
+                                                    end
+                                                end
+                                                setclipboard(table.concat(report, "\n"))
+                                                copyBtn.Text = "[COPIED]"
+                                                task.wait(1)
+                                                copyBtn.Text = "[COPY]"
+                                            else
+                                                copyBtn.Text = "[NO API]"
+                                                task.wait(2)
+                                                copyBtn.Text = "[COPY]"
+                                            end
+                                        end)
+                                    else
+                                        local isUpdating = false
+                                        obj:GetPropertyChangedSignal("Text"):Connect(function()
+                                            if not isUpdating and obj.Text ~= targetRichText then
+                                                isUpdating = true
+                                                obj.RichText = true
+                                                obj.Text = targetRichText
+                                                isUpdating = false
+                                            end
+                                        end)
+                                    end
                                 end
+                            end
+                        else
+                            local lineIdx = outputLines[idx] and outputLines[idx]:match(" %[FID:(%d+):")
+                            if lineIdx then
+                                lineIdx = tonumber(lineIdx)
+                                if not resultLines[lineIdx] then resultLines[lineIdx] = {} end
+                                table.insert(resultLines[lineIdx], obj)
                             end
                         end
                         break
@@ -188,7 +317,7 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
             checkAndFormatLabel(desc)
         end)
 
-        -- ~30fps update loop for smooth pulsing
+        -- ~30fps update loop for smooth pulsing headers
         local lastUpdate = 0
         RunService.RenderStepped:Connect(function()
             local now = tick()
