@@ -1,9 +1,10 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook with clean toolbar row for filters and clipboard
+-- rainbow text gen, output line rendering, devconsole hook with clean UI elements toolbar
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
 
+val = {} -- placeholder safeguard
 local Ui = {}
 
 -- Clean per-letter HSV pulse engine
@@ -141,7 +142,7 @@ function Ui.printPlain(outputLines, animatedLineIndices)
     return plainBuffer
 end
 
--- attach dev console with interactive toolbar row
+-- attach dev console with clean UI elements toolbar
 function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, runData, durationMs, toolbarMarker)
     if not devConsole then
         Config.log("RENDER", "Skipping rich-text formatter, no DevConsole available", "INFO")
@@ -165,18 +166,26 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                             if idx <= #outputLines then
                                 local targetRichText = outputLines[idx]
                                 if targetRichText then
-                                    obj.Text = targetRichText
-
-                                    -- Toolbar Row Setup (Filters + Copy Button)
+                                    -- Toolbar Row Setup (Clean UI Container)
                                     if targetRichText:find(toolbarMarker, 1, true) then
-                                        local cleanTitle = targetRichText:gsub(toolbarMarker, "")
-                                        obj.Text = cleanTitle
+                                        obj.Text = "" -- Clear underlying text completely to prevent duplication
 
                                         local toolbarFrame = Instance.new("Frame")
                                         toolbarFrame.BackgroundTransparency = 1
-                                        toolbarFrame.Size = UDim2.new(0, 310, 1, 0)
-                                        toolbarFrame.Position = UDim2.new(0, 130, 0, 0)
+                                        toolbarFrame.Size = UDim2.new(1, 0, 1, 0)
+                                        toolbarFrame.Position = UDim2.new(0, 0, 0, 0)
                                         toolbarFrame.Parent = obj
+
+                                        local statusLbl = Instance.new("TextLabel")
+                                        statusLbl.Text = "[FILTER: ALL]"
+                                        statusLbl.TextColor3 = Color3.fromRGB(128, 128, 128)
+                                        statusLbl.BackgroundTransparency = 1
+                                        statusLbl.Size = UDim2.new(0, 120, 1, 0)
+                                        statusLbl.Position = UDim2.new(0, 5, 0, 0)
+                                        statusLbl.Font = Enum.Font.Code
+                                        statusLbl.TextSize = 11
+                                        statusLbl.TextXAlignment = Enum.TextXAlignment.Left
+                                        statusLbl.Parent = toolbarFrame
 
                                         local function createButton(name, posX, width, color)
                                             local btn = Instance.new("TextButton")
@@ -192,13 +201,13 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                                             return btn
                                         end
 
-                                        local btnAll = createButton("ALL", 0, 48, Color3.fromRGB(200, 200, 200))
-                                        local btnCrit = createButton("CRIT", 52, 48, Color3.fromRGB(255, 100, 100))
-                                        local btnFail = createButton("FAIL", 104, 48, Color3.fromRGB(255, 165, 0))
-                                        local copyBtn = createButton("COPY", 156, 56, Color3.fromRGB(100, 255, 100))
+                                        local btnAll = createButton("ALL", 130, 48, Color3.fromRGB(200, 200, 200))
+                                        local btnCrit = createButton("CRIT", 182, 48, Color3.fromRGB(255, 100, 100))
+                                        local btnFail = createButton("FAIL", 234, 48, Color3.fromRGB(255, 165, 0))
+                                        local copyBtn = createButton("COPY", 286, 56, Color3.fromRGB(100, 255, 100))
 
                                         local function applyFilter(filterType)
-                                            obj.Text = cleanTitle:gsub("%[FILTER: %w+%]", "[FILTER: " .. filterType .. "]")
+                                            statusLbl.Text = "[FILTER: " .. filterType .. "]"
                                             
                                             for lineIdx, lineLabels in pairs(resultLines) do
                                                 local shouldShow = true
@@ -246,6 +255,7 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                                             end
                                         end)
                                     else
+                                        obj.Text = targetRichText
                                         local isUpdating = false
                                         obj:GetPropertyChangedSignal("Text"):Connect(function()
                                             if not isUpdating and obj.Text ~= targetRichText then
