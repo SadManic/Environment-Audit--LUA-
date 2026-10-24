@@ -1,5 +1,5 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook
+-- rainbow text gen, output line rendering, devconsole hook with failure severity grading
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
@@ -69,8 +69,18 @@ function Ui.buildOutputLines(runData)
                     or string.format('<font color="%s"><b>[FAIL]</b></font>', Config.HEX_RED)
 
                 table.insert(outputLines, string.format(formatSpecifier, Config.HEX_WHITE, name, badge))
-                if data.err then
-                    table.insert(outputLines, string.format('      <font color="%s"><i>↳ %s</i></font>', Config.HEX_RED, data.err))
+                
+                -- Enhanced failure breakdown with Critical/Warning classification and reason
+                if data.status == "FAIL" then
+                    local isCritical = (catName == "Integrity & Sandbox" or catName == "Security & Anti-Cheat" or name:find("jail") or name:find("freeze"))
+                    local severityBadge = isCritical 
+                        and string.format('<font color="%s"><b>[CRITICAL FAILURE]</b></font>', Config.HEX_RED)
+                        or string.format('<font color="%s"><b>[WARNING]</b></font>', Config.HEX_YELLOW)
+
+                    table.insert(outputLines, string.format('      Severity : %s', severityBadge))
+                    if data.err then
+                        table.insert(outputLines, string.format('      <font color="%s"><i>↳ Reason : %s</i></font>', Config.HEX_RED, data.err))
+                    end
                 end
             end
         end
