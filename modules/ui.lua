@@ -1,5 +1,5 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook with failure severity grading
+-- rainbow text gen, output line rendering, devconsole hook with cleaned error formatting
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
@@ -70,16 +70,17 @@ function Ui.buildOutputLines(runData)
 
                 table.insert(outputLines, string.format(formatSpecifier, Config.HEX_WHITE, name, badge))
                 
-                -- Explicit failure severity and error reason lines
+                -- Streamlined severity tag + cleaned error reason on a single sub-line
                 if data.status == "FAIL" then
                     local isCritical = (catName == "Integrity & Sandbox" or catName == "Security & Anti-Cheat" or name:find("jail") or name:find("freeze"))
                     local severityText = isCritical and "[CRITICAL FAILURE]" or "[WARNING]"
                     local severityHex = isCritical and Config.HEX_RED or Config.HEX_YELLOW
 
-                    table.insert(outputLines, string.format('      Severity : <font color="%s"><b>%s</b></font>', severityHex, severityText))
-                    if data.err then
-                        table.insert(outputLines, string.format('      <font color="%s"><i>↳ Reason : %s</i></font>', Config.HEX_RED, data.err))
-                    end
+                    local cleanErr = data.err or "Unknown error"
+                    -- Strip out the file path/line number prefix (e.g., "tests.lua:373: ") for a clean display
+                    cleanErr = cleanErr:gsub("^.-:%d+:%s*", "")
+
+                    table.insert(outputLines, string.format('      <font color="%s"><b>%s</b></font> <font color="%s"><i>↳ %s</i></font>', severityHex, severityText, Config.HEX_RED, cleanErr))
                 end
             end
         end
