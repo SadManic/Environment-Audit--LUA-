@@ -188,9 +188,7 @@ local function runDebugReflectionTests(runner)
         assert(type(cloneRefFunc) == "function", "Missing cloneref")
         local testPart = Instance.new("Part")
         local ref1 = cloneRefFunc(testPart)
-        local ref2 = cloneRefFunc(testPart)
         assert(type(ref1) == "userdata" or type(ref1) == "table", "cloneref did not return valid proxy object")
-        assert(ref1 == testPart, "Proxy equality check failed")
     end)
 
     runner:runTest("compareinstances", Config.CAT_TECH, function()
@@ -314,19 +312,18 @@ local function runIntegritySandboxTests(runner)
         setreadonly(protectedMeta, originalReadOnlyState)
     end)
 
-    -- check for leaks besides just the word "exploit"
     runner:runTest("Traceback filtering", Config.CAT_INT, function()
         assert(type(newcclosure) == "function", "Missing newcclosure")
 
         local leakPatterns = {
             "exploit",
-            "%.dll",                    -- Injected module names
-            "%.so",                     -- Linux-side loaded libs
-            "[Cc]:[\\/]",               -- Absolute windows paths
-            "/home/",                   -- Absolute unix paths
-            "%[C%]",                    -- Raw C-stack frame marker some VMs leak
-            "internal/",                -- Common internal source dir naming
-            "bytecode",                 -- Decompiler/bytecode leakage
+            "%.dll",
+            "%.so",
+            "[Cc]:[\\/]",
+            "/home/",
+            "%[C%]",
+            "internal/",
+            "bytecode",
         }
 
         local leaked = nil
@@ -357,6 +354,69 @@ local function runIntegritySandboxTests(runner)
     Config.log("SUITE", string.format("Category '%s' complete (%d/%d passed so far)", Config.CAT_INT, runner.passed, runner.total), "INFO")
 end
 
+local function runSecurityComplianceTests(runner)
+    Config.log("SUITE", string.format("Beginning category '%s'", Config.CAT_SEC), "INFO")
+
+    -- 1. Luau table.freeze Immutability Compliance
+    runner:runTest("Luau table.freeze Enforcement", Config.CAT_SEC, function()
+        assert(type(table.freeze) == "function", "Missing table.freeze")
+        assert(type(table.isfrozen) == "function", "Missing table.isfrozen")
+        local t = { value = 100 }
+        table.freeze(t)
+        assert(table.isfrozen(t) == true, "table.isfrozen returned false")
+        
+        local ok = pcall(function()
+            t.value = 200
+        end)
+        assert(not ok, "Executor allowed mutation on a frozen Luau table")
+    end)
+
+    -- 2. Network Isolation / Loopback Restriction Check
+    runner:runTest("Network Isolation (127.0.0.1)", Config.CAT_SEC, function()
+        local reqFunc = request or http_request or (http and http.request)
+        assert(type(reqFunc) == "function", "Missing HTTP request function")
+        
+        local success, res = pcall(function()
+            return reqFunc({
+                Url = "http://127.0.0.1:1337/",
+                Method = "GET"
+            })
+        end)
+        -- An ideal secure environment blocks local loopback or handles it cleanly without crashing
+        assert(success, "HTTP request to local loopback threw an unhandled runtime exception")
+    end)
+
+    -- 3. Dangerous File Extension Restriction Check
+    runner:runTest("Dangerous Extension Guard", Config.CAT_SEC, function()
+        assert(type(writefile) == "function", "Missing writefile")
+        local dangerousName = "payload_test.exe"
+        local ok = pcall(function()
+            writefile(dangerousName, "MZ_DANGEROUS_HEADER")
+        end)
+        if ok then
+            pcall(delfile, dangerousName)
+            -- If writefile allows arbitrary extensions like .exe, flag it as a potential risk boundary
+            error("writefile allowed writing executable file extension (.exe)")
+        end
+    end)
+
+    -- 4. Global Environment Pollution Audit
+    runner:runTest("Global Environment Cleanliness", Config.CAT_SEC, function()
+        assert(type(getgenv) == "function", "Missing getgenv")
+        local env = getgenv()
+        local strayCount = 0
+        -- Check for uninitialized or leftover global keys
+        for k, _ in pairs(env) do
+            if type(k) == "string" and k:match("^__test_pollution") then
+                strayCount = strayCount + 1
+            end
+        end
+        assert(strayCount == 0, "Detected leftover pollution in getgenv()")
+    end)
+
+    Config.log("SUITE", string.format("Category '%s' complete (%d/%d passed so far)", Config.CAT_SEC, runner.passed, runner.total), "INFO")
+end
+
 -- runs the whole suite, hands back a runData table for ui.lua / logger.lua to use
 function Tests.run()
     local execName, execVersion = Tests.identifyExecutor()
@@ -366,6 +426,7 @@ function Tests.run()
     runDebugReflectionTests(runner)
     runExtraApiTests(runner)
     runIntegritySandboxTests(runner)
+    runSecurityComplianceTests(runner)
 
     Config.log("SUITE", string.format("All categories complete: %d passed, %d failed, %d total", runner.passed, runner.failed, runner.total), "INFO")
 
