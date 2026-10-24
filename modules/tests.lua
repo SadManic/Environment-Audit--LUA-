@@ -349,6 +349,30 @@ local function runIntegritySandboxTests(runner)
         local validRead = readfile(filename) == "jailed"
         pcall(delfile, filename)
         assert(validRead, "Basic file write failed")
+
+        local escapeAttempts = {
+            "../../../../escaped_test_1.txt",       -- Classic relative traversal
+            "..\\..\\..\\..\\escaped_test_2.txt",   -- Backslash traversal (windows-style)
+            "/etc/escaped_test_3.txt",              -- Absolute unix path
+            "C:/Windows/escaped_test_4.txt",        -- Absolute windows path
+            "....//....//escaped_test_5.txt",       -- Doubled-dot slash trick
+            "%2e%2e/%2e%2e/escaped_test_6.txt",     -- URL-encoded traversal
+        }
+
+        local escapedPaths = {}
+        for _, path in ipairs(escapeAttempts) do
+            local ok = pcall(function()
+                writefile(path, "escape")
+            end)
+            if ok then
+                table.insert(escapedPaths, path)
+                pcall(delfile, path)
+            end
+        end
+
+        assert(#escapedPaths == 0,
+            string.format("writefile allowed %d directory traversal escape(s): %s",
+                #escapedPaths, table.concat(escapedPaths, ", ")))
     end)
 
     Config.log("SUITE", string.format("Category '%s' complete (%d/%d passed so far)", Config.CAT_INT, runner.passed, runner.total), "INFO")
@@ -357,7 +381,6 @@ end
 local function runSecurityComplianceTests(runner)
     Config.log("SUITE", string.format("Beginning category '%s'", Config.CAT_SEC), "INFO")
 
-    -- 1. Luau table.freeze Immutability Compliance
     runner:runTest("Luau table.freeze Enforcement", Config.CAT_SEC, function()
         assert(type(table.freeze) == "function", "Missing table.freeze")
         assert(type(table.isfrozen) == "function", "Missing table.isfrozen")
@@ -371,22 +394,19 @@ local function runSecurityComplianceTests(runner)
         assert(not ok, "Executor allowed mutation on a frozen Luau table")
     end)
 
-    -- 2. Network Isolation / Loopback Restriction Check
     runner:runTest("Network Isolation (127.0.0.1)", Config.CAT_SEC, function()
         local reqFunc = request or http_request or (http and http.request)
         assert(type(reqFunc) == "function", "Missing HTTP request function")
         
-        local success, res = pcall(function()
+        local success, _ = pcall(function()
             return reqFunc({
                 Url = "http://127.0.0.1:1337/",
                 Method = "GET"
             })
         end)
-        -- An ideal secure environment blocks local loopback or handles it cleanly without crashing
         assert(success, "HTTP request to local loopback threw an unhandled runtime exception")
     end)
 
-    -- 3. Dangerous File Extension Restriction Check
     runner:runTest("Dangerous Extension Guard", Config.CAT_SEC, function()
         assert(type(writefile) == "function", "Missing writefile")
         local dangerousName = "payload_test.exe"
@@ -395,17 +415,14 @@ local function runSecurityComplianceTests(runner)
         end)
         if ok then
             pcall(delfile, dangerousName)
-            -- If writefile allows arbitrary extensions like .exe, flag it as a potential risk boundary
             error("writefile allowed writing executable file extension (.exe)")
         end
     end)
 
-    -- 4. Global Environment Pollution Audit
     runner:runTest("Global Environment Cleanliness", Config.CAT_SEC, function()
         assert(type(getgenv) == "function", "Missing getgenv")
         local env = getgenv()
         local strayCount = 0
-        -- Check for uninitialized or leftover global keys
         for k, _ in pairs(env) do
             if type(k) == "string" and k:match("^__test_pollution") then
                 strayCount = strayCount + 1
