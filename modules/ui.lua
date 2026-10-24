@@ -1,12 +1,12 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook with transparent container row
+-- Rainbow text engine, clean console output, floating interactive controls
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
 
 local Ui = {}
 
--- Clean per-letter HSV pulse engine
 function Ui.getAnimatedRainbowText(text, timeOffset)
     local result = ""
     local len = #text
@@ -30,14 +30,13 @@ function Ui.getAnimatedRainbowText(text, timeOffset)
     return "<b>" .. result .. "</b>"
 end
 
--- build the output lines from a finished run
 function Ui.buildOutputLines(runData, durationMs)
     Config.log("RENDER", "Assembling output lines and computing scores", "INFO")
 
     local outputLines = {}
     local animatedLineIndices = {}
+    local lineMetadata = {}
 
-    -- Clean text header using pure letters and spaces
     local aegisAsciiHeader = {
         "AEGIS SECURITY SUITE",
         "ENVIRONMENT INTEGRITY AUDIT"
@@ -48,18 +47,15 @@ function Ui.buildOutputLines(runData, durationMs)
         animatedLineIndices[idx] = line
     end
 
-    -- Benchmark & Software Info at the top
     table.insert(outputLines, string.format('<font color="%s"><b>Exec Time :</b></font> <font color="%s">%.2fms</font>', Config.HEX_PURPLE, Config.HEX_CYAN, durationMs or 0))
     table.insert(outputLines, string.format('<font color="%s"><b>Software  :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execName))
     table.insert(outputLines, string.format('<font color="%s"><b>Version   :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execVersion))
     table.insert(outputLines, string.format('<font color="%s"><b>Thread ID :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, type(getthreadidentity) == "function" and tostring(getthreadidentity()) or "Unknown"))
     table.insert(outputLines, string.format('<font color="%s"><i>[+] Checks complete!</i></font>', Config.HEX_CYAN))
     
-    local toolbarMarker = " [TOOLBAR_UI_MARKER]"
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
-    table.insert(outputLines, string.format('<font color="%s"><b>                    DETAILED LOGS                   </b></font>', Config.HEX_CYAN))
+    table.insert(outputLines, string.format('<font color="%s"><b>                  DETAILED LOGS                   </b></font>', Config.HEX_CYAN))
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
-    table.insert(outputLines, " " .. toolbarMarker)
 
     local formatSpecifier = string.format('   <font color="%%s">%%-%ds</font> : %%s', runData.maxNameLength)
 
@@ -73,8 +69,8 @@ function Ui.buildOutputLines(runData, durationMs)
                     or string.format('<font color="%s"><b>[FAIL]</b></font>', Config.HEX_RED)
 
                 local lineIdx = #outputLines + 1
-                local filterTag = string.format(" [FID:%d:%s]", lineIdx, data.status)
-                table.insert(outputLines, string.format(formatSpecifier, Config.HEX_WHITE, name, badge) .. filterTag)
+                table.insert(outputLines, string.format(formatSpecifier, Config.HEX_WHITE, name, badge))
+                lineMetadata[lineIdx] = { status = data.status, isCritical = false }
                 
                 if data.status == "FAIL" then
                     local isCritical = (catName == "Integrity & Sandbox" or catName == "Security & Anti-Cheat" or name:find("jail") or name:find("freeze"))
@@ -84,7 +80,9 @@ function Ui.buildOutputLines(runData, durationMs)
                     local cleanErr = data.err or "Unknown error"
                     cleanErr = cleanErr:gsub("^.-:%d+:%s*", "")
 
-                    table.insert(outputLines, string.format('      <font color="%s"><b>%s</b></font> <font color="%s"><i>↳ %s</i></font>', severityHex, severityText, Config.HEX_RED, cleanErr) .. filterTag)
+                    local reasonIdx = #outputLines + 1
+                    table.insert(outputLines, string.format('      <font color="%s"><b>%s</b></font> <font color="%s"><i>↳ %s</i></font>', severityHex, severityText, Config.HEX_RED, cleanErr))
+                    lineMetadata[reasonIdx] = { status = "FAIL", isCritical = isCritical }
                 end
             end
         end
@@ -115,7 +113,7 @@ function Ui.buildOutputLines(runData, durationMs)
             or "disabled (no writefile/readfile)"))
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
 
-    return outputLines, animatedLineIndices, toolbarMarker
+    return outputLines, animatedLineIndices, lineMetadata
 end
 
 function Ui.printPlain(outputLines, animatedLineIndices)
@@ -138,17 +136,10 @@ function Ui.printPlain(outputLines, animatedLineIndices)
     return plainBuffer
 end
 
-function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, runData, durationMs, toolbarMarker)
-    if not devConsole then
-        Config.log("RENDER", "Skipping rich-text formatter, no DevConsole available", "INFO")
-        return
-    end
-
-    Config.log("RENDER", "Attaching rich-text formatter to DevConsole labels", "INFO")
-
+function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, lineMetadata, runData, durationMs)
     task.spawn(function()
         local activeLabels = {}
-        local resultLines = {}
+        local labelsByLineIdx = {}
 
         local function checkAndFormatLabel(obj)
             if obj:IsA("TextLabel") then
@@ -156,137 +147,22 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                     if obj.Text:find(marker, 1, true) then
                         obj.RichText = true
                         activeLabels[idx] = obj
+                        labelsByLineIdx[idx] = obj
 
                         if not animatedLineIndices[idx] then
                             if idx <= #outputLines then
                                 local targetRichText = outputLines[idx]
-                                if targetRichText then
-                                    if targetRichText:find(toolbarMarker, 1, true) then
-                                        -- Force native printed text completely invisible so it cannot bleed through
-                                        obj.TextTransparency = 1
-                                        obj.Text = " "
+                                obj.Text = targetRichText
 
-                                        if obj:FindFirstChild("AEGIS_Toolbar") then
-                                            obj.AEGIS_Toolbar:Destroy()
-                                        end
-
-                                        local toolbarFrame = Instance.new("Frame")
-                                        toolbarFrame.Name = "AEGIS_Toolbar"
-                                        toolbarFrame.BackgroundTransparency = 1
-                                        toolbarFrame.Size = UDim2.new(1, 0, 1, 0)
-                                        toolbarFrame.Position = UDim2.new(0, 0, 0, 0)
-                                        toolbarFrame.Parent = obj
-
-                                        local statusLbl = Instance.new("TextLabel")
-                                        statusLbl.Text = "[FILTER: ALL]"
-                                        statusLbl.TextColor3 = Color3.fromRGB(130, 130, 130)
-                                        statusLbl.BackgroundTransparency = 1
-                                        statusLbl.Size = UDim2.new(0, 110, 1, 0)
-                                        statusLbl.Position = UDim2.new(0, 2, 0, 0)
-                                        statusLbl.Font = Enum.Font.Code
-                                        statusLbl.TextSize = 11
-                                        statusLbl.TextXAlignment = Enum.TextXAlignment.Left
-                                        statusLbl.Parent = toolbarFrame
-
-                                        local function createButton(name, posX, width, color)
-                                            local btn = Instance.new("TextButton")
-                                            btn.Text = name
-                                            btn.TextColor3 = color
-                                            btn.BackgroundTransparency = 0.3
-                                            btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-                                            btn.Size = UDim2.new(0, width, 0, 18)
-                                            btn.Position = UDim2.new(0, posX, 0.5, -9)
-                                            btn.Font = Enum.Font.Code
-                                            btn.TextSize = 11
-                                            btn.Parent = toolbarFrame
-                                            return btn
-                                        end
-
-                                        local btnAll  = createButton("ALL", 120, 46, Color3.fromRGB(210, 210, 210))
-                                        local btnCrit = createButton("CRIT", 172, 46, Color3.fromRGB(255, 95, 95))
-                                        local btnFail = createButton("FAIL", 224, 46, Color3.fromRGB(255, 170, 0))
-                                        local copyBtn = createButton("COPY", 276, 54, Color3.fromRGB(110, 255, 110))
-
-                                        local function applyFilter(filterType)
-                                            statusLbl.Text = "[FILTER: " .. filterType .. "]"
-                                            for lineIdx, lineLabels in pairs(resultLines) do
-                                                local shouldShow = true
-                                                local lineText = outputLines[lineIdx] or ""
-                                                if filterType == "CRIT" then
-                                                    shouldShow = lineText:find("%[CRITICAL FAILURE%]") ~= nil
-                                                elseif filterType == "FAIL" then
-                                                    shouldShow = lineText:find("FAIL") ~= nil
-                                                end
-                                                for _, lbl in ipairs(lineLabels) do
-                                                    if lbl and lbl.Parent then
-                                                        lbl.Parent.Visible = shouldShow
-                                                    end
-                                                end
-                                            end
-                                        end
-
-                                        btnAll.MouseButton1Click:Connect(function() applyFilter("ALL") end)
-                                        btnCrit.MouseButton1Click:Connect(function() applyFilter("CRIT") end)
-                                        btnFail.MouseButton1Click:Connect(function() applyFilter("FAIL") end)
-
-                                        copyBtn.MouseButton1Click:Connect(function()
-                                            if setclipboard then
-                                                local report = {}
-                                                table.insert(report, "--- AEGIS SECURITY AUDIT REPORT ---")
-                                                table.insert(report, string.format("Software: %s (%s)", runData.execName, runData.execVersion))
-                                                table.insert(report, string.format("Exec Time: %.2fms", durationMs or 0))
-                                                table.insert(report, string.format("Score: %.1f%%", runData.weightedPct))
-                                                table.insert(report, "----------------------------------")
-                                                for _, line in ipairs(outputLines) do
-                                                    if not line:find("PLACEHOLDER") and not line:find("=================") and not line:find(" [FID") then
-                                                        table.insert(report, line:gsub("<[^>]+>", ""))
-                                                    elseif line:find(" [FID") and (line:find("FAIL") or line:find("CRITICAL")) then
-                                                        table.insert(report, line:gsub(" %[FID:.*", ""):gsub("<[^>]+>", ""))
-                                                    end
-                                                end
-                                                setclipboard(table.concat(report, "\n"))
-                                                copyBtn.Text = "COPIED"
-                                                task.wait(1)
-                                                copyBtn.Text = "COPY"
-                                            else
-                                                copyBtn.Text = "NO API"
-                                                task.wait(2)
-                                                copyBtn.Text = "COPY"
-                                            end
-                                        end)
-
-                                        -- Guard against DevConsole resetting Text or TextTransparency
-                                        local isLocking = false
-                                        local function enforceHidden()
-                                            if not isLocking and (obj.TextTransparency ~= 1 or obj.Text ~= " ") then
-                                                isLocking = true
-                                                obj.TextTransparency = 1
-                                                obj.Text = " "
-                                                isLocking = false
-                                            end
-                                        end
-                                        obj:GetPropertyChangedSignal("Text"):Connect(enforceHidden)
-                                        obj:GetPropertyChangedSignal("TextTransparency"):Connect(enforceHidden)
-                                    else
+                                local isUpdating = false
+                                obj:GetPropertyChangedSignal("Text"):Connect(function()
+                                    if not isUpdating and obj.Text ~= targetRichText then
+                                        isUpdating = true
+                                        obj.RichText = true
                                         obj.Text = targetRichText
-                                        local isUpdating = false
-                                        obj:GetPropertyChangedSignal("Text"):Connect(function()
-                                            if not isUpdating and obj.Text ~= targetRichText then
-                                                isUpdating = true
-                                                obj.RichText = true
-                                                obj.Text = targetRichText
-                                                isUpdating = false
-                                            end
-                                        end)
+                                        isUpdating = false
                                     end
-                                end
-                            end
-                        else
-                            local lineIdx = outputLines[idx] and outputLines[idx]:match(" %[FID:(%d+):")
-                            if lineIdx then
-                                lineIdx = tonumber(lineIdx)
-                                if not resultLines[lineIdx] then resultLines[lineIdx] = {} end
-                                table.insert(resultLines[lineIdx], obj)
+                                end)
                             end
                         end
                         break
@@ -295,13 +171,114 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
             end
         end
 
-        for _, v in pairs(devConsole:GetDescendants()) do
-            checkAndFormatLabel(v)
+        if devConsole then
+            for _, v in pairs(devConsole:GetDescendants()) do
+                checkAndFormatLabel(v)
+            end
+
+            devConsole.DescendantAdded:Connect(function(desc)
+                task.wait()
+                checkAndFormatLabel(desc)
+            end)
         end
 
-        devConsole.DescendantAdded:Connect(function(desc)
-            task.wait()
-            checkAndFormatLabel(desc)
+        -- Floating standalone toolbar (docked top-right, avoids DevConsole text overlap entirely)
+        local existingGui = CoreGui:FindFirstChild("AEGIS_ToolbarGui")
+        if existingGui then existingGui:Destroy() end
+
+        local screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "AEGIS_ToolbarGui"
+        screenGui.ResetOnSpawn = false
+        pcall(function()
+            if syn and syn.protect_gui then syn.protect_gui(screenGui)
+            elseif protectgui then protectgui(screenGui) end
+        end)
+        screenGui.Parent = CoreGui
+
+        local bar = Instance.new("Frame")
+        bar.Name = "Toolbar"
+        bar.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+        bar.BorderSizePixel = 1
+        bar.BorderColor3 = Color3.fromRGB(55, 55, 65)
+        bar.Size = UDim2.new(0, 310, 0, 30)
+        bar.Position = UDim2.new(1, -325, 0, 10)
+        bar.Active = true
+        bar.Draggable = true
+        bar.Parent = screenGui
+
+        local title = Instance.new("TextLabel")
+        title.Text = "AEGIS: ALL"
+        title.Font = Enum.Font.Code
+        title.TextSize = 11
+        title.TextColor3 = Color3.fromRGB(180, 180, 180)
+        title.BackgroundTransparency = 1
+        title.Size = UDim2.new(0, 95, 1, 0)
+        title.Position = UDim2.new(0, 8, 0, 0)
+        title.TextXAlignment = Enum.TextXAlignment.Left
+        title.Parent = bar
+
+        local function makeBtn(name, xPos, width, col)
+            local btn = Instance.new("TextButton")
+            btn.Text = name
+            btn.TextColor3 = col
+            btn.BackgroundColor3 = Color3.fromRGB(36, 36, 42)
+            btn.BorderSizePixel = 0
+            btn.Size = UDim2.new(0, width, 0, 20)
+            btn.Position = UDim2.new(0, xPos, 0.5, -10)
+            btn.Font = Enum.Font.Code
+            btn.TextSize = 11
+            btn.Parent = bar
+            return btn
+        end
+
+        local btnAll  = makeBtn("ALL", 105, 42, Color3.fromRGB(220, 220, 220))
+        local btnCrit = makeBtn("CRIT", 151, 44, Color3.fromRGB(255, 95, 95))
+        local btnFail = makeBtn("FAIL", 199, 44, Color3.fromRGB(255, 175, 50))
+        local btnCopy = makeBtn("COPY", 247, 52, Color3.fromRGB(110, 255, 130))
+
+        local function applyFilter(filterType)
+            title.Text = "AEGIS: " .. filterType
+            for lineIdx, meta in pairs(lineMetadata) do
+                local lbl = labelsByLineIdx[lineIdx]
+                if lbl and lbl.Parent then
+                    local show = true
+                    if filterType == "CRIT" then
+                        show = (meta.status == "FAIL" and meta.isCritical == true)
+                    elseif filterType == "FAIL" then
+                        show = (meta.status == "FAIL")
+                    end
+                    lbl.Visible = show
+                end
+            end
+        end
+
+        btnAll.MouseButton1Click:Connect(function() applyFilter("ALL") end)
+        btnCrit.MouseButton1Click:Connect(function() applyFilter("CRIT") end)
+        btnFail.MouseButton1Click:Connect(function() applyFilter("FAIL") end)
+
+        btnCopy.MouseButton1Click:Connect(function()
+            if setclipboard then
+                local report = {
+                    "--- AEGIS AUDIT REPORT ---",
+                    string.format("Software: %s (%s)", runData.execName, runData.execVersion),
+                    string.format("Exec Time: %.2fms", durationMs or 0),
+                    string.format("Score: %.1f%%", runData.weightedPct),
+                    "--------------------------"
+                }
+                for _, line in ipairs(outputLines) do
+                    if not line:find("PLACEHOLDER") and not line:find("========") then
+                        table.insert(report, (line:gsub("<[^>]+>", "")))
+                    end
+                end
+                setclipboard(table.concat(report, "\n"))
+                btnCopy.Text = "COPIED"
+                task.wait(1)
+                btnCopy.Text = "COPY"
+            else
+                btnCopy.Text = "NO API"
+                task.wait(2)
+                btnCopy.Text = "COPY"
+            end
         end)
 
         local lastUpdate = 0
