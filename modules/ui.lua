@@ -1,11 +1,13 @@
 -- ui.lua
--- Rainbow text engine, rich-text console hook, merged failure badges, and exhaustive technical report export
+-- Rainbow text engine, rich-text console hook, merged failure badges, and advanced floating toolbar
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 
 local Ui = {}
+
+local activeRainbowConnection = nil
 
 function Ui.getAnimatedRainbowText(text, timeOffset)
     local result = ""
@@ -137,7 +139,7 @@ function Ui.printPlain(outputLines, animatedLineIndices)
     return plainBuffer
 end
 
-function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, lineMetadata, runData, durationMs)
+function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, lineMetadata, runData, durationMs, reRunCallback)
     task.spawn(function()
         local activeLabels = {}
         local labelsByLineIdx = {}
@@ -191,6 +193,7 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
             end)
         end
 
+        -- Clean up prior screen gui instances
         local existingGui = CoreGui:FindFirstChild("AEGIS_ToolbarGui")
         if existingGui then existingGui:Destroy() end
 
@@ -203,49 +206,98 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
         end)
         screenGui.Parent = CoreGui
 
+        local fullWidth = 475
+        local minWidth = 110
+        local isMinimized = false
+
         local bar = Instance.new("Frame")
         bar.Name = "Toolbar"
-        bar.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+        bar.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
         bar.BorderSizePixel = 1
-        bar.BorderColor3 = Color3.fromRGB(55, 55, 65)
-        bar.Size = UDim2.new(0, 310, 0, 30)
-        bar.Position = UDim2.new(1, -325, 0, 10)
+        bar.BorderColor3 = Color3.fromRGB(50, 50, 60)
+        bar.Size = UDim2.new(0, fullWidth, 0, 32)
+        bar.Position = UDim2.new(1, -fullWidth - 15, 0, 10)
         bar.Active = true
         bar.Draggable = true
+        bar.ClipsDescendants = true
         bar.Parent = screenGui
 
+        -- Score chip color-coding
+        local scoreColor = runData.weightedPct >= 90 and Color3.fromRGB(60, 220, 120)
+            or (runData.weightedPct >= 75 and Color3.fromRGB(240, 190, 60) or Color3.fromRGB(240, 80, 80))
+
+        local scoreChip = Instance.new("TextLabel")
+        scoreChip.Text = string.format("%.1f%%", runData.weightedPct)
+        scoreChip.TextColor3 = scoreColor
+        scoreChip.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+        scoreChip.BorderSizePixel = 1
+        scoreChip.BorderColor3 = scoreColor
+        scoreChip.Size = UDim2.new(0, 50, 0, 20)
+        scoreChip.Position = UDim2.new(0, 8, 0.5, -10)
+        scoreChip.Font = Enum.Font.Code
+        scoreChip.TextSize = 11
+        scoreChip.Parent = bar
+
         local title = Instance.new("TextLabel")
-        title.Text = "AEGIS: ALL"
+        title.Text = "AEGIS"
         title.Font = Enum.Font.Code
-        title.TextSize = 11
-        title.TextColor3 = Color3.fromRGB(180, 180, 180)
+        title.TextSize = 12
+        title.TextColor3 = Color3.fromRGB(220, 220, 220)
         title.BackgroundTransparency = 1
-        title.Size = UDim2.new(0, 95, 1, 0)
-        title.Position = UDim2.new(0, 8, 0, 0)
+        title.Size = UDim2.new(0, 42, 1, 0)
+        title.Position = UDim2.new(0, 64, 0, 0)
         title.TextXAlignment = Enum.TextXAlignment.Left
         title.Parent = bar
 
-        local function makeBtn(name, xPos, width, col)
+        local controlsContainer = Instance.new("Frame")
+        controlsContainer.Name = "Controls"
+        controlsContainer.BackgroundTransparency = 1
+        controlsContainer.Size = UDim2.new(0, 320, 1, 0)
+        controlsContainer.Position = UDim2.new(0, 112, 0, 0)
+        controlsContainer.Parent = bar
+
+        local buttons = {}
+        local currentActiveFilter = "ALL"
+
+        local function makeBtn(parent, name, xPos, width, col)
             local btn = Instance.new("TextButton")
+            btn.Name = name
             btn.Text = name
             btn.TextColor3 = col
-            btn.BackgroundColor3 = Color3.fromRGB(36, 36, 42)
-            btn.BorderSizePixel = 0
+            btn.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+            btn.BorderSizePixel = 1
+            btn.BorderColor3 = Color3.fromRGB(45, 45, 55)
             btn.Size = UDim2.new(0, width, 0, 20)
             btn.Position = UDim2.new(0, xPos, 0.5, -10)
             btn.Font = Enum.Font.Code
             btn.TextSize = 11
-            btn.Parent = bar
+            btn.Parent = parent
             return btn
         end
 
-        local btnAll  = makeBtn("ALL", 105, 42, Color3.fromRGB(220, 220, 220))
-        local btnCrit = makeBtn("CRIT", 151, 44, Color3.fromRGB(255, 95, 95))
-        local btnFail = makeBtn("FAIL", 199, 44, Color3.fromRGB(255, 175, 50))
-        local btnCopy = makeBtn("COPY", 247, 52, Color3.fromRGB(110, 255, 130))
+        local btnAll  = makeBtn(controlsContainer, "ALL", 0, 38, Color3.fromRGB(210, 210, 210))
+        local btnCrit = makeBtn(controlsContainer, "CRIT", 42, 42, Color3.fromRGB(255, 95, 95))
+        local btnFail = makeBtn(controlsContainer, "FAIL", 88, 42, Color3.fromRGB(255, 175, 50))
+        local btnLogs = makeBtn(controlsContainer, "LOGS", 134, 44, Color3.fromRGB(180, 150, 255))
+        local btnCopy = makeBtn(controlsContainer, "COPY", 182, 44, Color3.fromRGB(110, 255, 130))
+        local btnReRun = makeBtn(controlsContainer, "↻", 230, 26, Color3.fromRGB(120, 200, 255))
 
-        local function applyFilter(filterType)
-            title.Text = "AEGIS: " .. filterType
+        buttons["ALL"] = btnAll
+        buttons["CRIT"] = btnCrit
+        buttons["FAIL"] = btnFail
+
+        local function updateFilterHighlights(filterType)
+            currentActiveFilter = filterType
+            for fName, btn in pairs(buttons) do
+                if fName == filterType then
+                    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+                    btn.BorderColor3 = Color3.fromRGB(100, 140, 255)
+                else
+                    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+                    btn.BorderColor3 = Color3.fromRGB(45, 45, 55)
+                end
+            end
+
             for lineIdx, meta in pairs(lineMetadata) do
                 local lbl = labelsByLineIdx[lineIdx]
                 if lbl and lbl.Parent then
@@ -260,10 +312,32 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
             end
         end
 
-        btnAll.MouseButton1Click:Connect(function() applyFilter("ALL") end)
-        btnCrit.MouseButton1Click:Connect(function() applyFilter("CRIT") end)
-        btnFail.MouseButton1Click:Connect(function() applyFilter("FAIL") end)
+        updateFilterHighlights("ALL")
 
+        btnAll.MouseButton1Click:Connect(function() updateFilterHighlights("ALL") end)
+        btnCrit.MouseButton1Click:Connect(function() updateFilterHighlights("CRIT") end)
+        btnFail.MouseButton1Click:Connect(function() updateFilterHighlights("FAIL") end)
+
+        -- Toggle DevConsole visibility
+        btnLogs.MouseButton1Click:Connect(function()
+            pcall(function()
+                local devMaster = CoreGui:FindFirstChild("DevConsoleMaster")
+                if devMaster and devMaster:FindFirstChild("DevConsoleWindow") then
+                    devMaster.DevConsoleWindow.Visible = not devMaster.DevConsoleWindow.Visible
+                end
+            end)
+        end)
+
+        -- Live re-run suite
+        btnReRun.MouseButton1Click:Connect(function()
+            btnReRun.Text = "..."
+            task.wait(0.05)
+            if reRunCallback then
+                reRunCallback()
+            end
+        end)
+
+        -- Exhaustive clipboard export
         btnCopy.MouseButton1Click:Connect(function()
             if setclipboard then
                 local report = {}
@@ -324,8 +398,43 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
             end
         end)
 
+        -- Window Controls (Minimize & Close)
+        local btnMin = makeBtn(bar, "—", fullWidth - 52, 22, Color3.fromRGB(190, 190, 190))
+        local btnClose = makeBtn(bar, "✕", fullWidth - 26, 22, Color3.fromRGB(255, 95, 95))
+
+        btnMin.MouseButton1Click:Connect(function()
+            isMinimized = not isMinimized
+            if isMinimized then
+                controlsContainer.Visible = false
+                btnMin.Text = "+"
+                btnMin.Position = UDim2.new(0, minWidth - 46, 0.5, -10)
+                btnClose.Position = UDim2.new(0, minWidth - 22, 0.5, -10)
+                bar.Size = UDim2.new(0, minWidth, 0, 32)
+            else
+                controlsContainer.Visible = true
+                btnMin.Text = "—"
+                btnMin.Position = UDim2.new(0, fullWidth - 52, 0.5, -10)
+                btnClose.Position = UDim2.new(0, fullWidth - 26, 0.5, -10)
+                bar.Size = UDim2.new(0, fullWidth, 0, 32)
+            end
+        end)
+
+        btnClose.MouseButton1Click:Connect(function()
+            if activeRainbowConnection then
+                activeRainbowConnection:Disconnect()
+                activeRainbowConnection = nil
+            end
+            screenGui:Destroy()
+        end)
+
+        -- Header Animation Render Loop
+        if activeRainbowConnection then
+            activeRainbowConnection:Disconnect()
+            activeRainbowConnection = nil
+        end
+
         local lastUpdate = 0
-        RunService.RenderStepped:Connect(function()
+        activeRainbowConnection = RunService.RenderStepped:Connect(function()
             local now = tick()
             if now - lastUpdate < 0.03 then return end
             lastUpdate = now
