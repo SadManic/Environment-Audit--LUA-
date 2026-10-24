@@ -1,5 +1,8 @@
 -- main.lua
 -- entrypoint. grabs every module straight off github, cache-busted, then runs the suite.
+--
+-- usage (paste into your executor):
+-- loadstring(game:HttpGet("https://raw.githubusercontent.com/SadManic/Environment-Audit--LUA-/main/modules/main.lua"))()
 
 task.wait(0.1)
 
@@ -13,8 +16,12 @@ local BASE_URL = string.format(
     REPO_OWNER, REPO_NAME, REPO_BRANCH, REPO_PATH
 )
 
+-- cache so we don't refetch a module every time something imports it
 local moduleCache = {}
 
+-- fetches "<name>.lua" from the repo, cache-busted so we're never stuck on a stale
+-- copy, compiles it, runs it, and caches the result. modules call import() themselves
+-- to grab their own deps so load order doesn't matter.
 function import(name)
     if moduleCache[name] then
         return moduleCache[name]
@@ -43,6 +50,7 @@ function import(name)
     return result
 end
 
+-- load modules
 local Config = import("config")
 local Tests  = import("tests")
 local Ui     = import("ui")
@@ -50,6 +58,7 @@ local Logger = import("logger")
 
 Config.log("INIT", "Diagnostic suite starting, waiting for environment to settle", "INFO")
 
+-- devconsole check for rich-text panel
 local CoreGui = game:GetService("CoreGui")
 local devConsole = nil
 pcall(function()
@@ -60,22 +69,22 @@ Config.log("INIT", devConsole
     or "DevConsoleMaster not found, falling back to plain print output",
     devConsole and "INFO" or "WARN")
 
--- 1. Start benchmark timer
+-- 1. Benchmark start
 local startTime = tick()
 
--- run the suite
+-- 2. Run diagnostic tests
 local runData = Tests.run()
 
--- export csv/json logs
+-- 3. Export CSV and JSON logs
 runData.EXPORT_ENABLED = Logger.EXPORT_ENABLED
 runData.jsonExportStatus = Logger.export(runData)
 
--- 2. End benchmark timer
+-- 4. Benchmark finish
 local durationMs = (tick() - startTime) * 1000
 
--- render output with benchmark time and interactive hooks
-local outputLines, animatedLineIndices, filterMarker, copyMarker = Ui.buildOutputLines(runData, durationMs)
+-- 5. Render output lines and attach interactive controls
+local outputLines, animatedLineIndices, lineMetadata = Ui.buildOutputLines(runData, durationMs)
 local plainBuffer = Ui.printPlain(outputLines, animatedLineIndices)
-Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, runData, durationMs, filterMarker, copyMarker)
+Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, lineMetadata, runData, durationMs)
 
-Config.log("DONE", string.format("Diagnostic suite finished in %.1fms", durationMs), "INFO")
+Config.log("DONE", string.format("Diagnostic suite finished in %.2fms", durationMs), "INFO")
