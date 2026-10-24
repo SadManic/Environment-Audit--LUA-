@@ -110,11 +110,13 @@ function Ui.buildOutputLines(runData)
     return outputLines, animatedLineIndices
 end
 
--- print it all, tag each line with a marker so we can find it again in devconsole
+-- print it all, tag each line with a unique session stamp + marker so old console logs never match
 function Ui.printPlain(outputLines, animatedLineIndices)
     Config.log("RENDER", string.format("Built %d output lines, printing to console", #outputLines), "INFO")
 
+    local sessionToken = math.floor(tick() % 100000)
     local plainBuffer = {}
+    
     for idx, line in ipairs(outputLines) do
         local plainText = line
         if animatedLineIndices[idx] then
@@ -122,7 +124,7 @@ function Ui.printPlain(outputLines, animatedLineIndices)
         else
             plainText = line:gsub("<[^>]+>", "")
         end
-        local marker = string.format(" [%02d]", idx)
+        local marker = string.format(" [S%d:%02d]", sessionToken, idx)
         print(plainText .. marker)
         plainBuffer[idx] = marker
     end
@@ -148,21 +150,23 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                         obj.RichText = true
                         activeLabels[idx] = obj
 
-                        -- lock text safely so it doesn't get overwritten with nil
+                        -- Only update and lock static lines if index is strictly within bounds
                         if not animatedLineIndices[idx] then
-                            local targetRichText = outputLines[idx]
-                            if targetRichText then
-                                obj.Text = targetRichText
+                            if idx <= #outputLines then
+                                local targetRichText = outputLines[idx]
+                                if targetRichText then
+                                    obj.Text = targetRichText
 
-                                local isUpdating = false
-                                obj:GetPropertyChangedSignal("Text"):Connect(function()
-                                    if not isUpdating and obj.Text ~= targetRichText then
-                                        isUpdating = true
-                                        obj.RichText = true
-                                        obj.Text = targetRichText
-                                        isUpdating = false
-                                    end
-                                end)
+                                    local isUpdating = false
+                                    obj:GetPropertyChangedSignal("Text"):Connect(function()
+                                        if not isUpdating and obj.Text ~= targetRichText then
+                                            isUpdating = true
+                                            obj.RichText = true
+                                            obj.Text = targetRichText
+                                            isUpdating = false
+                                        end
+                                    end)
+                                end
                             end
                         end
                         break
