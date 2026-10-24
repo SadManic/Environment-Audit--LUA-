@@ -1,13 +1,36 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook
+-- rainbow text gen, output line rendering, devconsole hook with ASCII AEGIS header
 
 local Config = import("config")
-
 local RunService = game:GetService("RunService")
 
 local Ui = {}
 
 -- colors shift over time using your exact HSV pulse engine
+function Ui.getAnimatedRainbowText(text, timeOffset)
+    local result = ""
+    local len = #text
+    timeOffset = timeOffset or 0
+
+    for i = 1, len do
+        local char = text:sub(i, i)
+        if char == " " then
+            result = result .. " "
+        else
+            local hue = ((i / len) + (timeOffset * 0.4)) % 1
+            local color = Color3.fromHSV(hue, 0.85, 1)
+            local hexColor = string.format("#%02X%02X%02X",
+                math.floor(color.R * 255),
+                math.floor(color.G * 255),
+                math.floor(color.B * 255)
+            )
+            result = result .. string.format('<font color="%s">%s</font>', hexColor, char)
+        end
+    end
+    return "<b>" + result + "</b>" -- wait, Lua concatenation uses .. instead of +
+end
+
+-- Fixed string concatenation for the return statement
 function Ui.getAnimatedRainbowText(text, timeOffset)
     local result = ""
     local len = #text
@@ -38,9 +61,21 @@ function Ui.buildOutputLines(runData)
     local outputLines = {}
     local animatedLineIndices = {}
 
-    -- header (animated with AEGIS branding)
-    table.insert(outputLines, "HEADER_ANIMATED_PLACEHOLDER")
-    animatedLineIndices[1] = "AEGIS // SECURITY AUDIT"
+    -- AEGIS ASCII Block Header (All lines animated with the rainbow pulse)
+    local aegisAsciiHeader = {
+        "╔═════════════════════════════════════════════════════════╗",
+        "║   █████╗ ███████╗ ██████╗ ██╗███████╗                   ║",
+        "║  ██╔══██╗██╔════╝██╔════╝ ██║██╔════╝                   ║",
+        "║  ███████║█████╗  ██║  ███╗██║███████╗                   ║",
+        "║  ██╔══██║██╔══╝  ██║   ██║██║╚════██║                   ║",
+        "║  ██║  ██║███████╗╚██████╔╝██║███████║   [ Security ]    ║",
+        "╚═════════════════════════════════════════════════════════╝"
+    }
+
+    for idx, line in ipairs(aegisAsciiHeader) do
+        table.insert(outputLines, "HEADER_ANIMATED_PLACEHOLDER_" .. idx)
+        animatedLineIndices[idx] = line
+    end
 
     table.insert(outputLines, string.format('<font color="%s"><b>Software  :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execName))
     table.insert(outputLines, string.format('<font color="%s"><b>Version   :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execVersion))
@@ -137,20 +172,22 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
                         obj.RichText = true
                         activeLabels[idx] = obj
 
-                        -- lock text so it doesn't get overwritten
+                        -- lock text safely so it doesn't get overwritten with nil
                         if not animatedLineIndices[idx] then
                             local targetRichText = outputLines[idx]
-                            obj.Text = targetRichTest
+                            if targetRichText then
+                                obj.Text = targetRichText
 
-                            local isUpdating = false
-                            obj:GetPropertyChangedSignal("Text"):Connect(function()
-                                if not isUpdating and obj.Text ~= targetRichText then
-                                    isUpdating = true
-                                    obj.RichText = true
-                                    obj.Text = targetRichText
-                                    isUpdating = false
-                                end
-                            end)
+                                local isUpdating = false
+                                obj:GetPropertyChangedSignal("Text"):Connect(function()
+                                    if not isUpdating and obj.Text ~= targetRichText then
+                                        isUpdating = true
+                                        obj.RichText = true
+                                        obj.Text = targetRichText
+                                        isUpdating = false
+                                    end
+                                end)
+                            end
                         end
                         break
                     end
@@ -177,11 +214,7 @@ function Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plain
             for idx, rawText in pairs(animatedLineIndices) do
                 local label = activeLabels[idx]
                 if label and label.Parent then
-                    if idx == 1 then
-                        label.Text = "🛡️ " .. Ui.getAnimatedRainbowText(rawText, now) .. " 🛡️"
-                    else
-                        label.Text = Ui.getAnimatedRainbowText(rawText, now)
-                    end
+                    label.Text = Ui.getAnimatedRainbowText(rawText, now)
                 end
             end
         end)
