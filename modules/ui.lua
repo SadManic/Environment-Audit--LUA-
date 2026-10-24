@@ -1,5 +1,5 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook with ASCII AEGIS header
+-- rainbow text gen, output line rendering, devconsole hook with clean ASCII AEGIS header
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
@@ -37,15 +37,11 @@ function Ui.buildOutputLines(runData)
     local outputLines = {}
     local animatedLineIndices = {}
 
-    -- AEGIS ASCII Block Header (All lines animated with the rainbow pulse)
+    -- Clean ASCII Header using standard characters to prevent font replacement errors
     local aegisAsciiHeader = {
-        "╔═════════════════════════════════════════════════════════╗",
-        "║   █████╗ ███████╗ ██████╗ ██╗███████╗                   ║",
-        "║  ██╔══██╗██╔════╝██╔════╝ ██║██╔════╝                   ║",
-        "║  ███████║█████╗  ██║  ███╗██║███████╗                   ║",
-        "║  ██╔══██║██╔══╝  ██║   ██║██║╚════██║                   ║",
-        "║  ██║  ██║███████╗╚██████╔╝██║███████║   [ Security ]    ║",
-        "╚═════════════════════════════════════════════════════════╝"
+        "+---------------------------------------------------------+",
+        "|               AEGIS // SECURITY AUDIT                   |",
+        "+---------------------------------------------------------+"
     }
 
     for idx, line in ipairs(aegisAsciiHeader) do
@@ -56,7 +52,7 @@ function Ui.buildOutputLines(runData)
     table.insert(outputLines, string.format('<font color="%s"><b>Software  :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execName))
     table.insert(outputLines, string.format('<font color="%s"><b>Version   :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execVersion))
     table.insert(outputLines, string.format('<font color="%s"><b>Thread ID :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, type(getthreadidentity) == "function" and tostring(getthreadidentity()) or "Unknown"))
-    table.insert(outputLines, string.format('<font color="%s"><i>⏳ Checks complete!</i></font>', Config.HEX_CYAN))
+    table.insert(outputLines, string.format('<font color="%s"><i>[+] Checks complete!</i></font>', Config.HEX_CYAN))
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
     table.insert(outputLines, string.format('<font color="%s"><b>                    DETAILED LOGS                   </b></font>', Config.HEX_CYAN))
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
@@ -65,13 +61,13 @@ function Ui.buildOutputLines(runData)
 
     -- use resultOrder so this prints in the same order every run
     for _, catName in ipairs(Config.categoryOrder) do
-        table.insert(outputLines, string.format('<font color="%s"><b>📁 <u>%s</u></b></font>', Config.HEX_PURPLE, catName:upper()))
+        table.insert(outputLines, string.format('<font color="%s"><b>[%s]</b></font>', Config.HEX_PURPLE, catName:upper()))
         for _, name in ipairs(runData.resultOrder) do
             local data = runData.results[name]
             if data.cat == catName then
                 local badge = data.status == "PASS"
-                    and string.format('<font color="%s"><b>✅ PASS</b></font>', Config.HEX_GREEN)
-                    or string.format('<font color="%s"><b>❌ FAIL</b></font>', Config.HEX_RED)
+                    and string.format('<font color="%s"><b>[PASS]</b></font>', Config.HEX_GREEN)
+                    or string.format('<font color="%s"><b>[FAIL]</b></font>', Config.HEX_RED)
 
                 table.insert(outputLines, string.format(formatSpecifier, Config.HEX_WHITE, name, badge))
                 if data.err then
@@ -84,15 +80,15 @@ function Ui.buildOutputLines(runData)
     Config.log("RENDER", string.format("Raw score %.1f%%, weighted score %.1f%%", runData.scorePct, runData.weightedPct), "INFO")
 
     local gradeBadge = runData.weightedPct >= 95
-        and string.format('<font color="%s"><b>🟢 PERFECT</b></font>', Config.HEX_GREEN)
-        or (runData.weightedPct >= 80 and string.format('<font color="%s"><b>🟡 GOOD</b></font>', Config.HEX_YELLOW) or string.format('<font color="%s"><b>🔴 WEAK</b></font>', Config.HEX_RED))
+        and string.format('<font color="%s"><b>[PERFECT]</b></font>', Config.HEX_GREEN)
+        or (runData.weightedPct >= 80 and string.format('<font color="%s"><b>[GOOD]</b></font>', Config.HEX_YELLOW) or string.format('<font color="%s"><b>[WEAK]</b></font>', Config.HEX_RED))
 
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
 
     -- summary line (animated)
     local summaryIdx = #outputLines + 1
     table.insert(outputLines, "SUMMARY_ANIMATED_PLACEHOLDER")
-    animatedLineIndices[summaryIdx] = "SUMMARY 📊"
+    animatedLineIndices[summaryIdx] = "SUMMARY"
 
     table.insert(outputLines, string.format('<font color="%s">==================================================</font>', Config.HEX_CYAN))
     table.insert(outputLines, string.format('<font color="%s"><b>Software  :</b></font> <font color="%s">%s (%s)</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execName, runData.execVersion))
