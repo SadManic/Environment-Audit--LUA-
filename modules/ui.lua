@@ -1,5 +1,5 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook with clean ASCII AEGIS header
+-- rainbow text gen, output line rendering, devconsole hook with clean text header
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
@@ -37,11 +37,10 @@ function Ui.buildOutputLines(runData)
     local outputLines = {}
     local animatedLineIndices = {}
 
-    -- Clean ASCII Header using standard characters to prevent font replacement errors
+    -- Clean text header using standard alphanumeric characters (fully supported by console fonts)
     local aegisAsciiHeader = {
-        "+---------------------------------------------------------+",
-        "|               AEGIS // SECURITY AUDIT                   |",
-        "+---------------------------------------------------------+"
+        "=== AEGIS SECURITY AUDIT SUITE ===",
+        "=== ENVIRONMENT INTEGRITY VERIFICATION ==="
     }
 
     for idx, line in ipairs(aegisAsciiHeader) do
