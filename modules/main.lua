@@ -46,7 +46,6 @@ function import(name)
     return result
 end
 
--- Import dependencies
 local Config = import("config")
 local Tests  = import("tests")
 local Ui     = import("ui")
@@ -64,22 +63,20 @@ Config.log("INIT", devConsole
     or "DevConsoleMaster not immediately found, fallback listeners engaged",
     devConsole and "INFO" or "WARN")
 
--- 1. Precision benchmark start
-local startTime = tick()
+local function runFullAudit()
+    local startTime = tick()
+    local runData = Tests.run()
 
--- 2. Execute test suite
-local runData = Tests.run()
+    runData.EXPORT_ENABLED = Logger.EXPORT_ENABLED
+    runData.jsonExportStatus = Logger.export(runData)
 
--- 3. Export CSV and JSON logs
-runData.EXPORT_ENABLED = Logger.EXPORT_ENABLED
-runData.jsonExportStatus = Logger.export(runData)
+    local durationMs = (tick() - startTime) * 1000
 
--- 4. Benchmark finish
-local durationMs = (tick() - startTime) * 1000
+    local outputLines, animatedLineIndices, lineMetadata = Ui.buildOutputLines(runData, durationMs)
+    local plainBuffer = Ui.printPlain(outputLines, animatedLineIndices)
+    Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, lineMetadata, runData, durationMs, runFullAudit)
 
--- 5. Format output and mount floating controller
-local outputLines, animatedLineIndices, lineMetadata = Ui.buildOutputLines(runData, durationMs)
-local plainBuffer = Ui.printPlain(outputLines, animatedLineIndices)
-Ui.attachDevConsole(devConsole, outputLines, animatedLineIndices, plainBuffer, lineMetadata, runData, durationMs)
+    Config.log("DONE", string.format("AEGIS suite run finished in %.2f ms", durationMs), "INFO")
+end
 
-Config.log("DONE", string.format("AEGIS suite run finished in %.2f ms", durationMs), "INFO")
+runFullAudit()
