@@ -1,5 +1,5 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook with cleaned error formatting
+-- rainbow text gen, output line rendering, devconsole hook with repositioned software info
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
@@ -48,6 +48,7 @@ function Ui.buildOutputLines(runData)
         animatedLineIndices[idx] = line
     end
 
+    -- Software info moved right below the header
     table.insert(outputLines, string.format('<font color="%s"><b>Software  :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execName))
     table.insert(outputLines, string.format('<font color="%s"><b>Version   :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, runData.execVersion))
     table.insert(outputLines, string.format('<font color="%s"><b>Thread ID :</b></font> <font color="%s">%s</font>', Config.HEX_PURPLE, Config.HEX_YELLOW, type(getthreadidentity) == "function" and tostring(getthreadidentity()) or "Unknown"))
@@ -70,14 +71,13 @@ function Ui.buildOutputLines(runData)
 
                 table.insert(outputLines, string.format(formatSpecifier, Config.HEX_WHITE, name, badge))
                 
-                -- Streamlined severity tag + cleaned error reason on a single sub-line
+                -- Explicit failure severity and error reason lines
                 if data.status == "FAIL" then
                     local isCritical = (catName == "Integrity & Sandbox" or catName == "Security & Anti-Cheat" or name:find("jail") or name:find("freeze"))
                     local severityText = isCritical and "[CRITICAL FAILURE]" or "[WARNING]"
                     local severityHex = isCritical and Config.HEX_RED or Config.HEX_YELLOW
 
                     local cleanErr = data.err or "Unknown error"
-                    -- Strip out the file path/line number prefix (e.g., "tests.lua:373: ") for a clean display
                     cleanErr = cleanErr:gsub("^.-:%d+:%s*", "")
 
                     table.insert(outputLines, string.format('      <font color="%s"><b>%s</b></font> <font color="%s"><i>↳ %s</i></font>', severityHex, severityText, Config.HEX_RED, cleanErr))
