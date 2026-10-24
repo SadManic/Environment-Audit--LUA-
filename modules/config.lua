@@ -1,7 +1,7 @@
 -- config.lua
 -- colors, category weights, debug settings. everything else imports this first.
 
-local Config = {}
+local config = {}
 
 -- flip to true when something's broken and you need the trace spam back
 Config.DEBUG_ENABLED = false
