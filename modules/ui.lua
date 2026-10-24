@@ -1,5 +1,5 @@
 -- ui.lua
--- rainbow text gen, output line rendering, devconsole hook with integrated failure tags
+-- rainbow text gen, output line rendering, devconsole hook with failure severity grading
 
 local Config = import("config")
 local RunService = game:GetService("RunService")
@@ -70,16 +70,14 @@ function Ui.buildOutputLines(runData)
 
                 table.insert(outputLines, string.format(formatSpecifier, Config.HEX_WHITE, name, badge))
                 
-                -- Integrated failure severity and reason on clean sub-lines
+                -- Explicit failure severity and error reason lines
                 if data.status == "FAIL" then
                     local isCritical = (catName == "Integrity & Sandbox" or catName == "Security & Anti-Cheat" or name:find("jail") or name:find("freeze"))
-                    local severityBadge = isCritical 
-                        and string.format('<font color="%s"><b>[CRITICAL FAILURE]</b></font>', Config.HEX_RED)
-                        or string.format('<font color="%s"><b>[WARNING]</b></font>', Config.HEX_YELLOW)
+                    local severityText = isCritical and "[CRITICAL FAILURE]" or "[WARNING]"
+                    local severityHex = isCritical and Config.HEX_RED or Config.HEX_YELLOW
 
-                    table.insert(outputLines, string.format('      Severity : %s', severityBadge))
+                    table.insert(outputLines, string.format('      Severity : <font color="%s"><b>%s</b></font>', severityHex, severityText))
                     if data.err then
-                        -- Clean up file paths from error string if desired, or show exact reason
                         table.insert(outputLines, string.format('      <font color="%s"><i>↳ Reason : %s</i></font>', Config.HEX_RED, data.err))
                     end
                 end
